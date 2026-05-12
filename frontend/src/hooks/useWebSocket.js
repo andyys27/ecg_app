@@ -7,7 +7,7 @@ const BUFFER_SIZE = 2000;
 const ESP32_IP = "192.168.1.100";
 const WS_URL = `ws://${ESP32_IP}:81`;
 
-export function useWebSocket() {
+export function useWebSocket(enabled = true) {
     // Circular buffer of samples for the graph
     // Using useRef to avoid re-rendering on every sample
     const bufferRef = useRef(Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
@@ -77,6 +77,8 @@ export function useWebSocket() {
 
     // Connect when starting the hook, reconnect on disconnect
     useEffect(() => {
+        if (!enabled) return;
+        
         let reconnectTimeout;
 
         function connect() {
@@ -109,7 +111,13 @@ export function useWebSocket() {
             clearTimeout(reconnectTimeout);
             if (wsRef.current) wsRef.current.close();
         };
-    }, [handleMessage]);
+    }, [handleMessage, enabled]);
     
+    const getBuffer = useCallback(() => {
+    const buf = bufferRef.current;
+    const idx = writeIdxRef.current;
+    return [...buf.slice(idx), ...buf.slice(0, idx)];
+}, []);
+
     return { metrics, getBuffer };
 }
