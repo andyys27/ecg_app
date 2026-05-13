@@ -1,33 +1,33 @@
 #pragma once
 #include <math.h>
 
-// IIR Filters (Biquads) and Pan-Tompkins implementation
+// Filtros IIR (Biquads) e implementacion Pan-Tompkins
 struct Biquad {
-    float b0,b1,b2,a1,a2;       // Feedforward (b) and feedback (a) coefficients
-    float w1=0, w2=0;           // States (delay elements)
+    float b0,b1,b2,a1,a2;       // Coeficientes feedforward (b) y feedback (a)
+    float w1=0, w2=0;           // Estados (elementos de retraso)
 
     float process(float x){
-        float y = b0*x + w1;    // Actual output based on input and state
-        w1 = b1*x - a1*y + w2;  // Update w1 for next sample
-        w2 = b2*x - a2*y;       // Update w2 for next sample
+        float y = b0*x + w1;    // Salida actual basada en la entrada y el estado
+        w1 = b1*x - a1*y + w2;  // Actualizar w1 para la siguiente muestra
+        w2 = b2*x - a2*y;       // Actualizar w2 para la siguiente muestra
         return y;
     }
 };
 
 // Notch 60 Hz, Q=30 
 Biquad makeNotch(float fs, float freq, float Q){
-    float w0 = 2*M_PI*freq/fs;      // Normalized angular frequency
-    float alpha = sin(w0)/(2*Q);    // Notch filter coefficients using standard formula
-    float c = cos(w0);              // osine coefficient for filter coefficients
-    float a0 = 1 + alpha;           // Normalization coefficient
+    float w0 = 2*M_PI*freq/fs;      // Frecuencia angular normalizada
+    float alpha = sin(w0)/(2*Q);    // Coeficiente del filtro notch
+    float c = cos(w0);              // Coeficiente de coseno para el filtro notch
+    float a0 = 1 + alpha;           // Coeficiente de normalizacion
 
-    // Coefficients for the biquad structure
+    // Coeficientes para la estructura biquad del filtro notch
     Biquad b;
-    // Feedforward coefficients for the notch filter
+    // Coeficientes feedforward para el filtro notch
     b.b0 = 1 / a0; 
     b.b1 = -2 * c / a0; 
     b.b2 = 1 / a0;    
-    // Feedback coefficients for the notch filter
+    // Coeficientes feedback para el filtro notch
     b.a1 = -2 * c / a0; 
     b.a2 = (1 - alpha) / a0;        
     return b;
@@ -35,18 +35,18 @@ Biquad makeNotch(float fs, float freq, float Q){
 
 // Highpass 0.5 Hz 
 Biquad makeHP(float fs, float fc){
-    float w = 2*M_PI*fc/fs;             // Normalized angular frequency for the highpass filter
-    float k = tan(w/2);                 // Pre-warping for bilinear transform
-    float k2 = k*k;                     // Square of k for the coefficients
-    float a0 = 1 + sqrt(2)*k + k2;      // Normalization coefficient
+    float w = 2*M_PI*fc/fs;             // Frecuencia angular normalizada para el filtro highpass
+    float k = tan(w/2);                 // Pre-warping para la transformada bilineal
+    float k2 = k*k;                     // Cuadrado de k para los coeficientes
+    float a0 = 1 + sqrt(2)*k + k2;      // Coeficiente de normalizacion
 
-    // Coefficients for the biquad structure
+    // Coeficientes para la estructura biquad
     Biquad b;
-    // Feedforward coefficients for the highpass filter 
+    // Coeficientes feedforward para el filtro highpass
     b.b0 = 1 / a0; 
     b.b1 = -2 / a0; 
     b.b2 = 1 / a0;       
-    // Feedback coefficients for the highpass filter        
+    // Coeficientes feedback para el filtro highpass
     b.a1 = 2 * (k2 - 1) / a0; 
     b.a2 = (1 - sqrt(2) * k + k2) / a0;     
     return b;
@@ -54,18 +54,18 @@ Biquad makeHP(float fs, float fc){
 
 // Lowpass 40 Hz
 Biquad makeLP(float fs, float fc){
-    float w = 2*M_PI*fc/fs;         // Normalized angular frequency for the lowpass filter
-    float k = tan(w/2);             // Pre-warping for bilinear transform
-    float k2 = k*k;                 // Square of k for the coefficients
-    float a0 = 1 + sqrt(2)*k + k2;  // Normalization coefficient
+    float w = 2*M_PI*fc/fs;         // Frecuencia angular normalizada para el filtro lowpass
+    float k = tan(w/2);             // Pre-warping para la transformada bilineal
+    float k2 = k*k;                 // Cuadrado de k para los coeficientes
+    float a0 = 1 + sqrt(2)*k + k2;  // Coeficiente de normalizacion
 
-    // Coefficients for the biquad structure
+    // Coeficientes para la estructura biquad
     Biquad b;
-    // Feedforward coefficients for the lowpass filter
+    // Coeficientes feedforward para el filtro lowpass
     b.b0 = k2 / a0; 
     b.b1 = 2 * k2 / a0; 
     b.b2 = k2 / a0;       
-    // Feedback coefficients for the lowpass filter
+    // Coeficientes feedback para el filtro lowpass
     b.a1 = 2 * (k2 - 1) / a0; 
     b.a2 = (1 - sqrt(2) * k + k2) / a0;     
     return b;
