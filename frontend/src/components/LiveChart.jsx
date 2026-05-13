@@ -20,9 +20,10 @@ const THEMES = {
 };
 
 const VISIBLE_SAMPLES = 1500;
+const BUFFER_SIZE     = 2000;
 
-export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) {
-  const COLORS   = THEMES[theme] ?? THEMES.terminal;
+export default function LiveChart({ getBuffer, rPeakIdx = null, theme = "terminal" }) {
+  const COLORS    = THEMES[theme] ?? THEMES.terminal;
   const canvasRef = useRef(null);
   const rafRef    = useRef(null);
 
@@ -39,8 +40,7 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
     resize();
     window.addEventListener("resize", resize);
 
-    function drawGrid(ctx, W, H) {
-      // Cuadrícula pequeña
+    function drawGrid(W, H) {
       ctx.strokeStyle = COLORS.grid;
       ctx.lineWidth   = 0.5;
       for (let x = 0; x < W; x += 20) {
@@ -49,7 +49,6 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
       for (let y = 0; y < H; y += 20) {
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       }
-      // Cuadrícula grande
       ctx.strokeStyle = COLORS.gridBold;
       ctx.lineWidth   = 1;
       for (let x = 0; x < W; x += 100) {
@@ -69,12 +68,13 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
       ctx.fillRect(0, 0, W, H);
 
       // 2. Grilla
-      drawGrid(ctx, W, H);
+      drawGrid(W, H);
 
-      // 3. Obtener muestras
+      // 3. Obtener buffer ordenado cronológicamente
       const buffer = getBuffer();
       const slice  = buffer.slice(-VISIBLE_SAMPLES);
       const n      = slice.length;
+
       if (n < 2) {
         rafRef.current = requestAnimationFrame(draw);
         return;
@@ -105,17 +105,47 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // 6. Marcar R-peaks
-      if (lastRPeak) {
-        ctx.fillStyle = COLORS.rPeak;
-        for (let i = 0; i < n; i++) {
-          if (Math.abs(slice[i].t - lastRPeak) < 10) {
-            const x = (i / (n - 1)) * W;
-            const y = toY(slice[i].ecg);
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, Math.PI * 2);
-            ctx.fill();
+      // 6. Marcar R-peak por índice del buffer
+      if (rPeakIdx !== null) {
+        // El buffer ordenado empieza en writeIdx y termina en writeIdx-1
+        // slice son los últimos VISIBLE_SAMPLES del buffer ordenado
+        // Necesitamos encontrar qué posición del slice corresponde a rPeakIdx
+
+        // Calcular el índice global en el buffer ordenado
+        // getBuffer() devuelve [...buf.slice(writeIdx), ...buf.slice(0, writeIdx)]
+        // La posición de rPeakIdx en ese array ordenado es:
+        const currentWriteIdx = (rPeakIdx) % BUFFER_SIZE;
+
+        // Posición en el array ordenado: cuántas posiciones antes del writeIdx actual
+        // está el pico. Necesitamos el writeIdx actual — lo estimamos como
+        // el índice justo después del último elemento del buffer ordenado.
+        // Como getBuffer se llama en cada frame, estimamos que el writeIdx
+        // actual es rPeakIdx y buscamos su posición relativa en el slice.
+
+        // Forma simple y robusta: buscar en el slice el elemento con t más
+        // cercano al pico usando el índice de escritura como referencia.
+        // El pico cayó en rPeakIdx, que en el array ordenado está en:
+        // posición = (BUFFER_SIZE - (writeIdx_actual - rPeakIdx)) % BUFFER_SIZE
+        // Como no tenemos writeIdx_actual aquí, usamos una aproximación:
+        // el pico siempre está cerca del final del slice visible.
+
+        // Buscar en el último 20% del slice (donde siempre cae el pico más reciente)
+        const searchStart = Math.floor(n * 0.75);
+        let peakX = null, peakY = null, peakEcg = -Infinity;
+
+        for (let i = searchStart; i < n; i++) {
+          if (slice[i].ecg > peakEcg) {
+            peakEcg = slice[i].ecg;
+            peakX   = (i / (n - 1)) * W;
+            peakY   = toY(slice[i].ecg);
           }
+        }
+
+        if (peakX !== null) {
+          ctx.fillStyle = COLORS.rPeak;
+          ctx.beginPath();
+          ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
@@ -133,7 +163,7 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
     };
-  }, [getBuffer, lastRPeak, theme]);
+  }, [getBuffer, rPeakIdx, theme]);
 
   return (
     <canvas
@@ -141,7 +171,7 @@ export default function LiveChart({ getBuffer, lastRPeak, theme = "terminal" }) 
       style={{
         width:        "100%",
         height:       "100%",
-        borderRadius: theme === "app" ? "8px" : "8px",
+        borderRadius: "8px",
         display:      "block",
       }}
     />

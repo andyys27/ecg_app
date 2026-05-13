@@ -255,7 +255,7 @@ export default function Monitor() {
             </div>
           </div>
           <div style={{ width: "100%", height: 180 }}>
-            <LiveChart getBuffer={getBuffer} lastRPeak={metrics.lastRPeak} theme="app" />
+            <LiveChart getBuffer={getBuffer} rPeakIdx={metrics.rPeakIdx ?? null} theme="app" />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
             <span style={{ fontSize: 10, color: "#3a4060" }}>3s</span>
