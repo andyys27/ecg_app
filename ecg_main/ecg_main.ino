@@ -1,90 +1,141 @@
-#include "ble_server.h"
-#include <ArduinoJson.h>
+// ecg_main/ecg_main.ino
+#include "BluetoothSerial.h"
+#include <ArduinoJSON.h>
 
-// Parametros
-static const int  PIN_ADC     = 34;
-static const int  FS          = 200;        // Hz de muestreo
-static const int  SEND_EVERY  = 5;          // Enviar 1 de cada 5 muestras → 40 paquetes/s
+BluetoothSerial SerialBT;
+ 
+// Pines de ECG y Leds
+const int PIN_SIGNAL = 32;
+const int LED_AZUL = 2;
+const int LED_VERDE = 4;
+const int LED_AMARILLO = 5;
+const int LED_ROJO = 18;
 
-// Deteccion de picos
-static const int  UMBRAL_HIGH = 2800;       // ADC 12-bit: ~2.25 V  (ajustar según offset)
-static const int  UMBRAL_LOW  = 1500;       // Histeresis para no rebotar
+// Muestreo
+const int FS = 100;
+const int BUF_SIZE = 300;       // 3 segundos de ventana
+const int DEAD_SAMPLES = 20;    // Muestras minimas entre picos
 
-static unsigned long lastPeakMs   = 0;
-static float         currentPPM   = 0.0f;
-static bool          overThresh   = false;  // Maquina de estados simple
+// Buffer
+volatile int buf[BUF_SIZE];
+volatile int idxISR = 0;
+volatile bool bufListo = false;
+volatile bool muestrear = true;
 
-// Timer ISR
-hw_timer_t*    sampleTimer  = nullptr;
-volatile bool  sampleReady  = false;
+// Timer
+hw_timer_t* timer = nullptr;
 
-void IRAM_ATTR onTimer() { sampleReady = true; }
+// ISR
+volatile bool  hayMuestra  = false;
+void IRAM_ATTR onTimer() {hayMuestra = true;}   // Avisa: loop() lee el ADC
+
+// Helpers de LED
+void setLeds(bool az, bool vd, bool am, bool ro) {
+    digitalWrite(LED_AZUL, az ? HIGH:LOW);
+    digitalWrite(LED_VERDE, vd ? HIGH:LOW);
+    digitalWrite(LED_AMARILLO, am ? HIGH:LOW);
+    digitalWrite(LED_ROJO, ro ? HIGH:LOW);
+}
+
+// Deteccion de picos con histeresis
+float calcularBPM(volatile int* datos, int n, int umbAlto, int umbBajo) {
+    int pico1 = -1; int pico2 = -1;
+    bool arriba = false;
+
+    for (int i = 0; i < n; i++) {
+        int v = datos[i];
+        if (!arriba && v > umbAlto) {
+            arriba = true;
+            if (pico1 == -1) {pico1 = i;} 
+            else if ((i - pico1) > DEAD_SAMPLES) {pico2 = i; break;}
+        } else if (arriba && v < umbBajo) {arriba = false;}
+    }
+    if (pico1 == -1 || pico2 == -1) return 0.0f;
+    int deltaMuestras = pico2 - pico1;
+    float periodoS = (float)deltaMuestras / FS;
+    return 60.0f / periodoS;    // BPM
+}
 
 void setup() {
     Serial.begin(115200);
-    analogReadResolution(12);           // 0–4095
-    analogSetAttenuation(ADC_11db);     // Rango 0–3.3 V en GPIO34
-    pinMode(PIN_ADC, INPUT);
+    analogReadResolution(12);             // 0–4095
+    analogSetAttenuation(ADC_11db);       // Rango 0–3.3 V en GPIO32
 
-    // BLE
-    bleBegin("ECG-ESP32");
+    // Leds
+    int leds[] = {LED_AZUL, LED_VERDE, LED_AMARILLO, LED_ROJO};
+    for (int pin:leds) { pinMode(pin, OUTPUT); }
+    setLeds(false, false, false, false);
 
-    // Timer a FS Hz
-    sampleTimer = timerBegin(1000000);              // contador a 1 MHz
-    timerAttachInterrupt(sampleTimer, &onTimer);
-    timerAlarm(sampleTimer, 1000000 / FS, true, 0); // disparo cada 1/FS segundos
+    // Bluetooth
+    SerialBT.begin("ESP32_Equipo2");
 
-    Serial.printf("[OK] Adquisición a %d Hz lista.\n", FS);
+    // Timer a FS Hz 
+    timer = timerBegin(1000000);
+    timerAttachInterrupt(timer, &onTimer);
+    timerAlarm(timer, 1000000 / FS, true, 0);
+
+    Serial.println("ECG INICIADO");
 }
 
 void loop() {
-    if (!sampleReady) return;
-    sampleReady = false;
-
-    // 1. Leer ADC
-    int raw = analogRead(PIN_ADC);
-
-    // 2. Deteccion de pico con histeresis
-    //    Sube por encima de UMBRAL_HIGH → detecta flanco ascendente → mide período
-    if (!overThresh && raw >= UMBRAL_HIGH) {
-        overThresh = true;
-
-        unsigned long now = millis();
-        if (lastPeakMs > 0) {
-            float periodoS = (now - lastPeakMs) / 1000.0f;
-            // Solo registrar si el período es fisiológicamente posible (20–300 ppm)
-            if (periodoS > 0.2f && periodoS < 3.0f) {
-                currentPPM = 60.0f / periodoS;
-            }
+    // Adquisicion\
+    if (hayMuestra && !bufListo) {
+        hayMuestra = false;
+        buf[idxISR] = analogRead(PIN_SIGNAL);
+        idxISR++;
+        if (idxISR >= BUF_SIZE) {
+            idxISR   = 0;
+            bufListo = true;
         }
-        lastPeakMs = now;
-    } else if (overThresh && raw < UMBRAL_LOW) {
-        overThresh = false;   // Resetea cuando baja: listo para el siguiente pico
     }
 
-    // 3. Enviar cada SEND_EVERY muestras
-    static int count = 0;
-    if (++count % SEND_EVERY != 0) return;
+    // Procesamiento
+    if (!bufListo) return;
+    bufListo = false;
 
-    // Clasificación por color
-    const char* color;
-    if      (currentPPM <= 0  )  color = "NONE";
-    else if (currentPPM <  60 )  color = "BLUE";
-    else if (currentPPM <= 100)  color = "GREEN";
-    else if (currentPPM <= 140)  color = "YELLOW";
-    else                         color = "RED";
+    // Rango de la ventana (para debug)
+    int minVal = 4095, maxVal = 0;
+    for (int i = 0; i < BUF_SIZE; i++) {
+        if (buf[i] < minVal) minVal = buf[i];
+        if (buf[i] > maxVal) maxVal = buf[i];
+    }
 
-    // Serializar y enviar
-    StaticJsonDocument<96> doc;
-    doc["t"]     = millis();
-    doc["raw"]   = raw;
-    doc["ppm"]   = (int)currentPPM;
-    doc["color"] = color;
+    // Umbrales adaptativos basados en la ventana actual
+    int rango = maxVal - minVal;
+    int umbAlto = (rango > 200) ? minVal + (int)(rango * 0.70f) : 1600;
+    int umbBajo = (rango > 200) ? minVal + (int)(rango * 0.40f) : 1500;
 
-    char buf[96];
-    serializeJson(doc, buf);
-    bleSend(buf);
+    float bpm = calcularBPM(buf, BUF_SIZE, umbAlto, umbBajo);
+    // Leds
+    if (bpm > 0   && bpm < 60 ) setLeds(true,  false, false, false);
+    else if (bpm >= 60 && bpm < 100) setLeds(false, true,  false, false);
+    else if (bpm >= 100&& bpm <=140) setLeds(false, false, true,  false);
+    else if (bpm > 140) setLeds(false, false, false, true );
+    else setLeds(false, false, false, false);
 
-    // Debug serial
-    Serial.printf("raw=%4d  ppm=%5.1f  %s\n", raw, currentPPM, color);
+    // Clasificacion de color
+    const char* color =
+        (bpm > 0 && bpm < 60 ) ? "BLUE"   :
+        (bpm >= 60 && bpm < 100) ? "GREEN"  :
+        (bpm >= 100&& bpm <=140) ? "YELLOW" :
+        (bpm > 140 ) ? "RED" : "NONE";
+
+    // JSON a Bluetooth
+    if (SerialBT.hasClient()) {
+        StaticJsonDocument<8192> doc;
+        doc["t"] = millis();
+        doc["bpm"] = (int)bpm;
+        doc["color"] = color;
+        doc["min"] = minVal;
+        doc["max"] = maxVal;
+        JsonArray ecg = doc.createNestedArray("ecg");
+        for (int i = 0; i < BUF_SIZE; i++) {ecg.add(buf[i]);}
+        char jsonBuf[8192];
+        serializeJson(doc, jsonBuf, sizeof(jsonBuf));
+        SerialBT.println(jsonBuf);
+    }
+
+    // Debug Serial
+    Serial.printf("Min:%4d  Max:%4d  UmbH:%4d  UmbL:%4d  BPM:%5.1f  [%s]\n",
+                  minVal, maxVal, umbAlto, umbBajo, bpm, color);
 }
