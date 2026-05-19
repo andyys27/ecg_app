@@ -33,11 +33,13 @@ export function useBluetooth() {
         catch { return; }
 
         const bpmValue = Number(data.bpm ?? NaN);
-        const ecgSamples = Array.isArray(data.ecg) ? data.ecg : [data.ecg];
         const baseTime = typeof data.t === "number" ? data.t : Date.now();
-        const sampleInterval = 1000 / 100; // 100 Hz
+        const sampleInterval = 1000 / 300; // 300 Hz (ECG)
 
-        if (Array.isArray(ecgSamples)) {
+        let lastPeak = null;
+        // Si el ESP32 envía la señal completa en 'ecg' la guardamos en el buffer
+        if (Array.isArray(data.ecg)) {
+            const ecgSamples = data.ecg;
             ecgSamples.forEach((sample, i) => {
                 const idx = writeIdxRef.current;
                 bufferRef.current[idx] = {
@@ -48,6 +50,15 @@ export function useBluetooth() {
             });
             sampleCountRef.current += ecgSamples.length;
         }
+        // Si el ESP32 envía picos detectados en 'rpeaks', los incorporamos al registro de picos
+        else if (Array.isArray(data.rpeaks)) {
+            const peaks = data.rpeaks.map((p) => Number(p)).filter((n) => !isNaN(n));
+            if (peaks.length > 0) {
+                // Mantener una lista de tiempos de R-peaks (ms)
+                rPeakTimesRef.current = [...rPeakTimesRef.current, ...peaks].slice(-200);
+                lastPeak = peaks[peaks.length - 1];
+            }
+        }
 
         setMetrics((prev) => ({
             ...prev,
@@ -55,6 +66,7 @@ export function useBluetooth() {
             color:       typeof data.color === "string" ? data.color : prev.color,
             min:         typeof data.min === "number" ? data.min : prev.min,
             max:         typeof data.max === "number" ? data.max : prev.max,
+            lastRPeak:   lastPeak ?? prev.lastRPeak,
             sampleCount: sampleCountRef.current,
         }));
     }, []);

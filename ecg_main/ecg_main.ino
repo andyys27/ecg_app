@@ -1,6 +1,5 @@
-// ecg_main/ecg_main.ino
 #include "BluetoothSerial.h"
-#include <ArduinoJSON.h>
+#include <ArduinoJson.h>
 
 BluetoothSerial SerialBT;
  
@@ -12,9 +11,9 @@ const int LED_AMARILLO = 5;
 const int LED_ROJO = 18;
 
 // Muestreo
-const int FS = 100;
-const int BUF_SIZE = 300;       // 3 segundos de ventana
-const int DEAD_SAMPLES = 20;    // Muestras minimas entre picos
+const int FS = 300;
+const int BUF_SIZE = 300;                       // 3 segundos de ventana
+const int DEAD_SAMPLES = (FS * 75) / 1000;      // Muestras minimas entre picos
 
 // Buffer
 volatile int buf[BUF_SIZE];
@@ -105,8 +104,56 @@ void loop() {
     int umbAlto = (rango > 200) ? minVal + (int)(rango * 0.70f) : 1600;
     int umbBajo = (rango > 200) ? minVal + (int)(rango * 0.40f) : 1500;
 
-    float bpm = calcularBPM(buf, BUF_SIZE, umbAlto, umbBajo);
-    // Leds
+    // Pan-Tompkins simplificado
+    static long deriv_sq[BUF_SIZE];
+    static long integ[BUF_SIZE];
+
+    // 1. Derivada al cuadrado
+    int prev = buf[0];
+    deriv_sq[0] = 0;
+    for (int i = 1; i < BUF_SIZE; i++) {
+        int d = buf[i] - prev;
+        prev = buf[i];
+        deriv_sq[i] = (long)d * (long)d;
+    }
+
+    // 2. Ventana integradora
+    int win = FS * 12 / 100; if (win < 1) win = 1;
+    long sum = 0;
+    for (int i = 0; i < BUF_SIZE; i++) {
+        sum += deriv_sq[i];
+        if (i >= win) sum -= deriv_sq[i - win];
+        integ[i] = sum / win;
+    }
+
+    // 3. Umbral adaptativo simple
+    long maxInt = 0;
+    for (int i = 0; i < BUF_SIZE; i++) if (integ[i] > maxInt) maxInt = integ[i];
+    long thresh = maxInt > 0 ? (maxInt * 35) / 100 : 0; // 35% del pico máximo
+
+    // 4. Deteccion de picos en integrador con refractario
+    const int refractory = FS * 25 / 100; // ~250 ms
+    int lastPeak = -refractory - 1;
+    int peakCount = 0;
+    int peakIdxs[64]; // guardamos hasta 64 picos por ventana
+    for (int i = 1; i < BUF_SIZE - 1; i++) {
+        if (integ[i] > thresh && integ[i - 1] <= thresh && (i - lastPeak) > refractory) {
+            if (peakCount < 64) peakIdxs[peakCount++] = i;
+            lastPeak = i;
+        }
+    }
+
+    // 5. Calcular BPM a partir de los dos últimos picos (si hay)
+    float bpm = 0.0f;
+    if (peakCount >= 2) {
+        int p1 = peakIdxs[peakCount - 2];
+        int p2 = peakIdxs[peakCount - 1];
+        int deltaSamples = p2 - p1;
+        float periodS = (float)deltaSamples / (float)FS;
+        if (periodS > 0) bpm = 60.0f / periodS;
+    }
+
+    // Leds según bpm
     if (bpm > 0   && bpm < 60 ) setLeds(true,  false, false, false);
     else if (bpm >= 60 && bpm < 100) setLeds(false, true,  false, false);
     else if (bpm >= 100&& bpm <=140) setLeds(false, false, true,  false);
@@ -120,17 +167,26 @@ void loop() {
         (bpm >= 100&& bpm <=140) ? "YELLOW" :
         (bpm > 140 ) ? "RED" : "NONE";
 
+    unsigned long now = millis();
+
     // JSON a Bluetooth
     if (SerialBT.hasClient()) {
-        StaticJsonDocument<8192> doc;
+        StaticJsonDocument<4096> doc;
         doc["t"] = millis();
         doc["bpm"] = (int)bpm;
         doc["color"] = color;
         doc["min"] = minVal;
         doc["max"] = maxVal;
+        JsonArray peaks = doc.createNestedArray("rpeaks");
+        for (int k = 0; k < peakCount; k++) {
+            int idx = peakIdxs[k];
+            long t_peak = (long)now - (long)((BUF_SIZE - 1 - idx) * 1000L / FS);
+            peaks.add(t_peak);
+        }
         JsonArray ecg = doc.createNestedArray("ecg");
         for (int i = 0; i < BUF_SIZE; i++) {ecg.add(buf[i]);}
-        char jsonBuf[8192];
+        
+        char jsonBuf[2048];
         serializeJson(doc, jsonBuf, sizeof(jsonBuf));
         SerialBT.println(jsonBuf);
     }

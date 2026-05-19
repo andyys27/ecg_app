@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate }                  from "react-router-dom";
 import { useAuth }                      from "../context/AuthContext";
 import { supabase }                     from "../lib/supabase";
-import { useWebSocket }                 from "../hooks/useWebSocket";
 import { useOfflineECG }                from "../hooks/useOfflineECG";
 import { useBluetooth }                 from "../hooks/useBluetooth";
 import LiveChart                         from "../components/LiveChart";
@@ -62,7 +61,6 @@ export default function Monitor() {
   const startRef = useRef(null);
 
   // Hooks de datos — siempre los tres, regla de React
-  const wsData      = useWebSocket(mode === "online");
   const offlineData = useOfflineECG(csvPath);
   const btData      = useBluetooth();
 
