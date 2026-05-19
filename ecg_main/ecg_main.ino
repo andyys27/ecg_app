@@ -7,12 +7,12 @@ BluetoothSerial SerialBT;
 const int PIN_SIGNAL = 32;
 const int LED_AZUL = 2;
 const int LED_VERDE = 4;
-const int LED_AMARILLO = 5;
+const int LED_AMARILLO = 15;
 const int LED_ROJO = 18;
 
 // Muestreo
 const int FS = 300;
-const int BUF_SIZE = 300;                       // 3 segundos de ventana
+const int BUF_SIZE = 300;                       // 1 segundos de ventana a 300 Hz
 const int DEAD_SAMPLES = (FS * 75) / 1000;      // Muestras minimas entre picos
 
 // Buffer
@@ -77,7 +77,7 @@ void setup() {
 }
 
 void loop() {
-    // Adquisicion\
+    // Adquisicion
     if (hayMuestra && !bufListo) {
         hayMuestra = false;
         buf[idxISR] = analogRead(PIN_SIGNAL);
@@ -187,7 +187,7 @@ void loop() {
         for (int i = 0; i < BUF_SIZE; i++) {ecg.add(buf[i]);}
         
         char jsonBuf[2048];
-        serializeJson(doc, jsonBuf, sizeof(jsonBuf));
+        serializeJson(doc, SerialBT);
         SerialBT.println(jsonBuf);
     }
 
