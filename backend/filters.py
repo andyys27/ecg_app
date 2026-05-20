@@ -3,7 +3,7 @@ from scipy.signal import butter, sosfilt, iirnotch, filtfilt, savgol_filter, fin
 from collections import deque
 
 # Diseño de fitros
-def bandpass(fs, low = 0.5, high = 150.0, order = 4):
+def bandpass(fs, low = 0.5, high = 45.0, order = 4):
     # Butterworth pasa-banda
     nyq = fs / 2
     lowcut = low / nyq
@@ -23,62 +23,69 @@ def savgol(window = 7, poly = 3):
 # Procesamiento de ECG
 class ECGProcessor:
     # Buffer circular para las ultimas N muestras 
-    def __init__(self, fs = 300, buffer_seconds = 5):
+    def __init__(self, fs = 300):
         self.fs = fs
-        self.buf_size = fs * buffer_seconds
 
         # Buffers circulares
-        self.raw_buf  = deque([0.0] * self.buf_size, maxlen=self.buf_size)
-        self.filt_buf = deque([0.0] * self.buf_size, maxlen=self.buf_size)
+        self.raw_history  = deque(maxlen=fs * 10)
+        self.filt_history = deque(maxlen=fs * 10)
 
         # Filtros
         self.sos_bp = bandpass(fs)
         self.b_notch, self.a_notch = notch(fs)
-        self.sg_win, self.sg_poly  = savgol()
 
-        # Estado de picos
-        self.last_peak_idx  = -1
-        self.last_bpm       = 0.0
-        self.sample_count   = 0
-
-        # Periodo refractario ~250 ms
-        self.refractory = int(fs * 0.25)
+        # Ultimo BPM conocido
+        self.last_bpm        = 0.0
+        self.last_color: str = "NONE"
 
     # API publica
-    def push(self, raw_value) -> dict:
-        # Recibe una muestra cruda y devuelve el paquete que se enviara al frontend por WebSocket
-        self.raw_buf.append(float(raw_value))
-        self.sample_count += 1
+    def process_window(self, esp32_packet) -> dict:
+        raw_list  = esp32_packet.get("raw", [])
+        if not raw_list:
+            return {}
+        raw_arr = np.array(raw_list, dtype=float)
 
-        # Filtrar el buffer completo
-        raw_arr  = np.array(self.raw_buf)
+        # Filtros
         filtered = self.apply_filters(raw_arr)
 
-        # Actualizar buffer filtrado
-        latest_filtered = float(filtered[-1])
-        self.filt_buf.append(latest_filtered)
+        # Picos R
+        esp_peaks = esp32_packet.get("rpeaks", [])
+        if esp_peaks:
+            peaks = esp_peaks
+        else:
+            peaks = self.detect_peaks(filtered)
 
-        # Deteccion de picos cada FS muestras
-        peaks, bpm = [], self.last_bpm
-        if self.sample_count % self.fs == 0:
-            peaks, bpm = self.detect_peaks(filtered)
+        # BPM
+        bpm = float(esp32_packet.get("bpm", 0.0))
+        if bpm > 0:
             self.last_bpm = bpm
+        else:
+            bpm = self.last_bpm
+ 
+        color = esp32_packet.get("color", bpm_to_color(bpm))
+        self.last_color = color
 
-        color = bpm_to_color(bpm)
+        # Actualizar historial
+        self.raw_history.extend(raw_list)
+        self.filt_history.extend(filtered.tolist())
 
         return {
-            "raw":      raw_value,
-            "filtered": round(latest_filtered, 2),
+            "raw":      raw_list,
+            "filtered": [round(v, 2) for v in filtered],
             "bpm":      round(bpm, 1),
-            "peaks":    peaks,          # indices relativos al buffer actual
+            "peaks":    peaks,          
             "color":    color,
+            "t":        esp32_packet.get("t", 0),
+            "min":      esp32_packet.get("min", int(raw_arr.min())),
+            "max":      esp32_packet.get("max", int(raw_arr.max())),
         }
 
+    # Devuelve los ultimos n puntos de ambas senales
     def snapshot(self, n = 300) -> dict:
-        # Devuelve los ultimos n puntos de ambas senales
-        raw_arr  = list(self.raw_buf)[-n:]
-        filt_arr = list(self.filt_buf)[-n:]
-        return {"raw": raw_arr, "filtered": filt_arr}
+        return {
+            "raw":      list(self.raw_history)[-n:],
+            "filtered": list(self.filt_history)[-n:],
+        }
 
     # Metodos internos
     def apply_filters(self, signal) -> np.ndarray:
@@ -89,39 +96,24 @@ class ECGProcessor:
         notched = filtfilt(self.b_notch, self.a_notch, bp)
 
         # 3. Suavizado Savitzky-Golay
-        smoothed = savgol_filter(notched, self.sg_win, self.sg_poly)
+        smoothed = savgol_filter(notched, window_length=7, polyorder=3)
         return smoothed
 
+    # Detecta picos R en la senal
     def detect_peaks(self, filtered):
-        # Detecta picos R con find_peaks
         sig_range = filtered.max() - filtered.min()
         if sig_range < 50:
-            return [], self.last_bpm
+            return []
 
         height_thresh = filtered.min() + sig_range * 0.60
-
-        peaks, _ = find_peaks(
-            filtered,
-            height   = height_thresh,
-            distance = self.refractory,
-        )
-
-        if len(peaks) < 2:
-            return peaks.tolist(), self.last_bpm
-
-        # BPM promedio de los ultimos intervalos R-R
-        rr_intervals = np.diff(peaks) / self.fs      
-        mean_rr      = float(np.mean(rr_intervals))
-        bpm          = 60.0 / mean_rr if mean_rr > 0 else 0.0
-
-        # Sanitizar. Rango fisiológico 20–300 BPM
-        bpm = bpm if 20 < bpm < 300 else self.last_bpm
-
-        return peaks.tolist(), bpm
+        refractory    = int(self.fs * 0.25)
+ 
+        peaks, _ = find_peaks(filtered, height=height_thresh, distance=refractory)
+        return peaks.tolist()
 
 
 # Utilidades
-def bpm_to_color(bpm: float) -> str:
+def bpm_to_color(bpm) -> str:
     if bpm <= 0:   return "NONE"
     if bpm < 60:   return "BLUE"
     if bpm < 100:  return "GREEN"

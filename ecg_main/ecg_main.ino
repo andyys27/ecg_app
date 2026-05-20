@@ -179,9 +179,9 @@ void loop() {
             peaks.add(t_peak);
         }
         
-        JsonArray ecg = doc.createNestedArray("ecg");
+        JsonArray raw = doc.createNestedArray("raw");
         for (int i = 0; i < BUF_SIZE; i++) {
-            ecg.add(bufProcesamiento[i]);
+            raw.add(bufProcesamiento[i]);
         }
         
         // Enviamos directo al Bluetooth y agregamos el salto de línea al final
