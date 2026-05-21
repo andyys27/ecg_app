@@ -62,7 +62,7 @@ class ECGProcessor:
 
         # 1. Logica de calculo de FS
         if not self.fs_calculated:
-            self.timestamps.append(current_time)
+            self.timestamps.append(current_t)
             self.raw_history.extend(raw_list)
 
             if(len(self.timestamps) >= self.required_sampled_fs):
