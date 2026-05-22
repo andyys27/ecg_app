@@ -1,4 +1,5 @@
 # Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Activate vEnv: source venv/bin/activate
 
 import asyncio
 import json
@@ -25,7 +26,7 @@ BUF_SIZE = int(os.getenv("BUF_SIZE", "300"))
 
 # Estado global
 sample_queue: asyncio.Queue = asyncio.Queue(maxsize=20)
-processor   : ECGProcessor  = ECGProcessor(fs=ECG_FS)
+processor   : ECGProcessor  = ECGProcessor()
 
 # Clientes WebSocket conectados
 ws_clients: set[WebSocket] = set()

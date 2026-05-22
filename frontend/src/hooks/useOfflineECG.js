@@ -1,28 +1,36 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const BUFFER_SIZE   = 2000;
-const OFFLINE_FS    = 360;
-const PLAYBACK_RATE = 1.0;
+// Constantes
+const BUFFER_SIZE   = 3000;
+const PLAYBACK_RATE = 1.0
+
+const WINDOW_SIZE = 3000;   // Tamano de la ventana simulada
 
 export function useOfflineECG(csvPath) {
-  const bufferRef     = useRef(Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
+  // Buffers circulares
+  const rawBufRef     = useRef(new Array(BUFFER_SIZE).fill({t:0, ecg:0}));
+  const filtBufRef    = useRef(new Array(BUFFER_SIZE).fill({t:0, ecg:0}));
   const writeIdxRef   = useRef(0);
-  const samplesRef    = useRef([]);
-  const playIdxRef    = useRef(0);
-  const intervalRef   = useRef(null);
   const rPeakTimesRef = useRef([]);
-  const peakIdxRef    = useRef(null);
+  
+  // Datos del CSV  
+  const samplesRef  = useRef([]);
+  const playIdxRef  = useRef(0);
+  const intervalRef = useRef(null);
+  const fsRef       = useRef(360);    // NOTA: VERIFICAR SI FUNCIONA EN 360
 
   const [metrics, setMetrics] = useState({
     bpm:        "--",
+    color:      "NONE",
+    mix:        0,
+    max:        0,
     lastRPeak:  null,
-    rPeakIdx:   null,
     connected:  false,
     sampleCount: 0,
     mode:       "offline",
   });
 
-  // ── Cargar CSV ───────────────────────────────────────
+  // Cargar CSV
   useEffect(() => {
     fetch(csvPath)
       .then((res) => {
@@ -32,10 +40,12 @@ export function useOfflineECG(csvPath) {
       .then((text) => {
         const lines   = text.trim().split("\n");
         const samples = [];
+        
         for (let i = 1; i < lines.length; i++) {
-          const [t, v] = lines[i].split(",").map(Number);
-          if (!isNaN(t) && !isNaN(v))
-            samples.push({ t: t * 1000, ecg: v });
+          const parts = lines[i].split(",");
+          if (parts.length < 2) continue;
+          const t = Number(parts[0]);
+          const v = Number(parts[1]);
         }
         samplesRef.current = samples;
         setMetrics((prev) => ({ ...prev, connected: true }));

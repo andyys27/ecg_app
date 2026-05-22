@@ -24,7 +24,7 @@ class ECGProcessor:
 
         # Buffers temporales para calcular la FS
         self.timestamps = []
-        self.required_sampled_fs = 250.0
+        self.required_packets_for_fs = 5
 
         # Buffers circulares para almacenar la historia de senales
         self.raw_history  = deque(maxlen=1000)
@@ -65,7 +65,7 @@ class ECGProcessor:
             self.timestamps.append(current_t)
             self.raw_history.extend(raw_list)
 
-            if(len(self.timestamps) >= self.required_sampled_fs):
+            if(len(self.timestamps) >= self.required_packets_for_fs):
                 total_duration = self.timestamps[-1] - self.timestamps[0]
                 if total_duration > 0:
                     samples_per_packet = len(raw_list)
@@ -83,7 +83,7 @@ class ECGProcessor:
 
         # Picos R
         esp_peaks = esp32_packet.get("rpeaks", [])
-        peaks = esp_peaks if esp_peaks else peaks = self.detect_peaks(filtered)
+        peaks = esp_peaks if esp_peaks else self.detect_peaks(filtered)
 
         # BPM
         bpm = float(esp32_packet.get("bpm", 0.0))
@@ -107,7 +107,7 @@ class ECGProcessor:
             "color":    color,
             "t":        current_t,
             "min":      int(raw_arr.min()),
-            "max":      round(self.fs, 2)
+            "max":      int(raw_arr.max()),
         }
 
     # Metodos internos
