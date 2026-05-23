@@ -1,7 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 
-// Páginas (las creamos en Etapa 2)
+// Páginas
 import Landing   from "./pages/Landing";
 import Login     from "./pages/Login";
 import Register  from "./pages/Register";

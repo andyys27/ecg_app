@@ -1,28 +1,41 @@
 import { useEffect, useRef } from "react";
 
+// Paleta por tema 
 const THEMES = {
   terminal: {
     background: "#0a0f0a",
     grid:       "#1a2e1a",
     gridBold:   "#1f3d1f",
-    signal:     "#00ff88",
+    raw:        "#2a6e4a",        // verde apagado para raw
+    filtered:   "#00ff88",        // verde brillante para filtrada
     rPeak:      "#ff4444",
-    text:       "#4a7a4a",
+    label:      "#4a7a4a",
+    divider:    "#1a3d1a",
+    glow:       true,
   },
   app: {
     background: "#111827",
     grid:       "rgba(255,255,255,0.03)",
     gridBold:   "rgba(255,255,255,0.06)",
-    signal:     "#4f8ef7",
+    raw:        "#2a4a7a",        // azul apagado para raw
+    filtered:   "#4f8ef7",        // azul brillante para filtrada
     rPeak:      "#e24b4a",
-    text:       "#3a4060",
+    label:      "#3a4060",
+    divider:    "rgba(255,255,255,0.06)",
+    glow:       false,
   },
 };
 
-const VISIBLE_SAMPLES = 1500;
-const BUFFER_SIZE     = 2000;
+const VISIBLE_SAMPLES = 1500;   // ≈ 5 s a 300 Hz
 
-export default function LiveChart({ getBuffer, rPeakIdx = null, theme = "terminal" }) {
+export default function LiveChart({
+  getBuffer,
+  getRPeaks,
+  signalType   = "filtered",
+  dualChannel  = false,
+  fs           = 300,
+  theme        = "terminal",
+}) {
   const COLORS    = THEMES[theme] ?? THEMES.terminal;
   const canvasRef = useRef(null);
   const rafRef    = useRef(null);
@@ -31,72 +44,60 @@ export default function LiveChart({ getBuffer, rPeakIdx = null, theme = "termina
     const canvas = canvasRef.current;
     const ctx    = canvas.getContext("2d");
 
+    // DPR y ResizeObserver 
     function resize() {
       const rect    = canvas.getBoundingClientRect();
       canvas.width  = rect.width  * window.devicePixelRatio;
       canvas.height = rect.height * window.devicePixelRatio;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     }
     resize();
-    window.addEventListener("resize", resize);
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
 
-    function drawGrid(W, H) {
-      ctx.strokeStyle = COLORS.grid;
+    // Grilla
+    function drawGrid(W, H, yOffset = 0, height = H) {
       ctx.lineWidth   = 0.5;
+      ctx.strokeStyle = COLORS.grid;
       for (let x = 0; x < W; x += 20) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, yOffset); ctx.lineTo(x, yOffset + height); ctx.stroke();
       }
-      for (let y = 0; y < H; y += 20) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      for (let y = 0; y < height; y += 20) {
+        ctx.beginPath(); ctx.moveTo(0, yOffset + y); ctx.lineTo(W, yOffset + y); ctx.stroke();
       }
-      ctx.strokeStyle = COLORS.gridBold;
       ctx.lineWidth   = 1;
+      ctx.strokeStyle = COLORS.gridBold;
       for (let x = 0; x < W; x += 100) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, yOffset); ctx.lineTo(x, yOffset + height); ctx.stroke();
       }
-      for (let y = 0; y < H; y += 100) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      for (let y = 0; y < height; y += 100) {
+        ctx.beginPath(); ctx.moveTo(0, yOffset + y); ctx.lineTo(W, yOffset + y); ctx.stroke();
       }
     }
 
-    function draw() {
-      const W = canvas.getBoundingClientRect().width;
-      const H = canvas.getBoundingClientRect().height;
+    // Dibujar una senal dentro de un carril 
+    function drawSignal({ slice, yOffset, laneH, color, label, peaks = [] }) {
+      const n = slice.length;
+      if (n < 2) return;
 
-      // 1. Fondo
-      ctx.fillStyle = COLORS.background;
-      ctx.fillRect(0, 0, W, H);
-
-      // 2. Grilla
-      drawGrid(W, H);
-
-      // 3. Obtener buffer ordenado cronológicamente
-      const buffer = getBuffer();
-      const slice  = buffer.slice(-VISIBLE_SAMPLES);
-      const n      = slice.length;
-
-      if (n < 2) {
-        rafRef.current = requestAnimationFrame(draw);
-        return;
-      }
-
-      // 4. Normalizar al rango vertical
-      let min = Infinity, max = -Infinity;
+      // Normalizacion independiente por carril
+      let minV = Infinity, maxV = -Infinity;
       for (let i = 0; i < n; i++) {
-        if (slice[i].ecg < min) min = slice[i].ecg;
-        if (slice[i].ecg > max) max = slice[i].ecg;
+        if (slice[i].ecg < minV) minV = slice[i].ecg;
+        if (slice[i].ecg > maxV) maxV = slice[i].ecg;
       }
-      const range   = max - min || 1;
-      const padding = H * 0.1;
-      const toY = (v) => H - padding - ((v - min) / range) * (H - 2 * padding);
+      const range = maxV - minV || 1;
+      const pad   = laneH * 0.1;
+      const toY   = (v) => yOffset + laneH - pad - ((v - minV) / range) * (laneH - 2 * pad);
 
-      // 5. Dibujar señal
+      const W = canvas.getBoundingClientRect().width;
+
+      // Linea de senal
       ctx.beginPath();
-      ctx.strokeStyle = COLORS.signal;
+      ctx.strokeStyle = color;
       ctx.lineWidth   = 1.5;
-      ctx.shadowColor = COLORS.signal;
-      ctx.shadowBlur  = theme === "terminal" ? 4 : 0;
-
+      if (COLORS.glow) { ctx.shadowColor = color; ctx.shadowBlur = 4; }
       for (let i = 0; i < n; i++) {
         const x = (i / (n - 1)) * W;
         const y = toY(slice[i].ecg);
@@ -105,75 +106,115 @@ export default function LiveChart({ getBuffer, rPeakIdx = null, theme = "termina
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // 6. Marcar R-peak por índice del buffer
-      if (rPeakIdx !== null) {
-        // El buffer ordenado empieza en writeIdx y termina en writeIdx-1
-        // slice son los últimos VISIBLE_SAMPLES del buffer ordenado
-        // Necesitamos encontrar qué posición del slice corresponde a rPeakIdx
+      // Picos R 
+      if (peaks.length > 0 && slice[0].t > 0) {
+        const tStart = slice[0].t;
+        const tEnd   = slice[n - 1].t;
+        const tSpan  = tEnd - tStart || 1;
 
-        // Calcular el índice global en el buffer ordenado
-        // getBuffer() devuelve [...buf.slice(writeIdx), ...buf.slice(0, writeIdx)]
-        // La posición de rPeakIdx en ese array ordenado es:
-        const currentWriteIdx = (rPeakIdx) % BUFFER_SIZE;
+        ctx.fillStyle = COLORS.rPeak;
+        if (COLORS.glow) { ctx.shadowColor = COLORS.rPeak; ctx.shadowBlur = 6; }
 
-        // Posición en el array ordenado: cuántas posiciones antes del writeIdx actual
-        // está el pico. Necesitamos el writeIdx actual — lo estimamos como
-        // el índice justo después del último elemento del buffer ordenado.
-        // Como getBuffer se llama en cada frame, estimamos que el writeIdx
-        // actual es rPeakIdx y buscamos su posición relativa en el slice.
-
-        // Forma simple y robusta: buscar en el slice el elemento con t más
-        // cercano al pico usando el índice de escritura como referencia.
-        // El pico cayó en rPeakIdx, que en el array ordenado está en:
-        // posición = (BUFFER_SIZE - (writeIdx_actual - rPeakIdx)) % BUFFER_SIZE
-        // Como no tenemos writeIdx_actual aquí, usamos una aproximación:
-        // el pico siempre está cerca del final del slice visible.
-
-        // Buscar en el último 20% del slice (donde siempre cae el pico más reciente)
-        const searchStart = Math.floor(n * 0.75);
-        let peakX = null, peakY = null, peakEcg = -Infinity;
-
-        for (let i = searchStart; i < n; i++) {
-          if (slice[i].ecg > peakEcg) {
-            peakEcg = slice[i].ecg;
-            peakX   = (i / (n - 1)) * W;
-            peakY   = toY(slice[i].ecg);
-          }
-        }
-
-        if (peakX !== null) {
-          ctx.fillStyle = COLORS.rPeak;
+        for (const pt of peaks) {
+          if (pt < tStart || pt > tEnd) continue;
+          const xRatio    = (pt - tStart) / tSpan;
+          const px        = xRatio * W;
+          const approxIdx = Math.min(Math.round(xRatio * (n - 1)), n - 1);
+          const py        = toY(slice[approxIdx]?.ecg ?? 0);
           ctx.beginPath();
-          ctx.arc(peakX, peakY, 4, 0, Math.PI * 2);
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.shadowBlur = 0;
       }
 
-      // 7. Label inferior
-      ctx.fillStyle = COLORS.text;
-      ctx.font      = "11px monospace";
-      ctx.fillText(`${(VISIBLE_SAMPLES / 500).toFixed(0)}s  |  500 Hz`, 10, H - 8);
+      // Etiqueta del carril
+      ctx.fillStyle = COLORS.label;
+      ctx.font      = "10px monospace";
+      ctx.fillText(label, 8, yOffset + laneH - 6);
+    }
+
+    // Linea divisoria entre carriles
+    function drawDivider(W, y) {
+      ctx.strokeStyle = COLORS.divider;
+      ctx.lineWidth   = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Loop de dibujo
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      const W    = rect.width;
+      const H    = rect.height;
+
+      ctx.fillStyle = COLORS.background;
+      ctx.fillRect(0, 0, W, H);
+
+      const peakTimes = typeof getRPeaks === "function" ? getRPeaks() : [];
+      const visS      = (VISIBLE_SAMPLES / fs).toFixed(0);
+
+      if (dualChannel) {
+        // Modo dual: raw arriba, filtrada abajo
+        const laneH = H / 2;
+
+        // Carril raw
+        drawGrid(W, H, 0, laneH);
+        const rawBuf   = getBuffer("raw");
+        const rawSlice = rawBuf.slice(-VISIBLE_SAMPLES);
+        drawSignal({
+          slice:   rawSlice,
+          yOffset: 0,
+          laneH,
+          color:   COLORS.raw,
+          label:   `RAW · ${visS}s · ${fs} Hz`,
+          peaks:   [],    
+        });
+
+        // Divisor
+        drawDivider(W, laneH);
+
+        // Carril filtrado
+        drawGrid(W, H, laneH, laneH);
+        const filtBuf   = getBuffer("filtered");
+        const filtSlice = filtBuf.slice(-VISIBLE_SAMPLES);
+        drawSignal({
+          slice:   filtSlice,
+          yOffset: laneH,
+          laneH,
+          color:   COLORS.filtered,
+          label:   `FILTRADA · 0.5–40 Hz · notch 60 Hz`,
+          peaks:   peakTimes,
+        });
+
+      } else {
+        // Modo simple: un solo canal
+        drawGrid(W, H);
+        const buf   = getBuffer(signalType);
+        const slice = buf.slice(-VISIBLE_SAMPLES);
+        drawSignal({
+          slice,
+          yOffset: 0,
+          laneH:   H,
+          color:   signalType === "raw" ? COLORS.raw : COLORS.filtered,
+          label:   `${signalType.toUpperCase()} · ${visS}s · ${fs} Hz`,
+          peaks:   peakTimes,
+        });
+      }
 
       rafRef.current = requestAnimationFrame(draw);
     }
 
     rafRef.current = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
 
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("resize", resize);
-    };
-  }, [getBuffer, rPeakIdx, theme]);
+  }, [getBuffer, getRPeaks, signalType, dualChannel, fs, theme]);
 
   return (
     <canvas
       ref={canvasRef}
-      style={{
-        width:        "100%",
-        height:       "100%",
-        borderRadius: "8px",
-        display:      "block",
-      }}
+      style={{ width: "100%", height: "100%", borderRadius: "8px", display: "block" }}
     />
   );
 }
