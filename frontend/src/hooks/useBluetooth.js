@@ -22,7 +22,7 @@ export function useBluetooth() {
     const wsRef     = useRef(null);     // WebSocket al backend Python
 
     const [metrics, setMetrics] = useState({
-        bpm:         "0",
+        bpm:         "--",
         color:       "NONE",
         min:         0,
         max:         0,
