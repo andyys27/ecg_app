@@ -74,7 +74,7 @@ export function useBluetooth() {
         // Convertir indices de picos a timestamps 
         if (peaks.length > 0) {
             const peakTime = peaks.map(idx => baseT + idx * sampleInterval);
-            rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTimes].slice(-50);
+            rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTime].slice(-50);
         }
 
         const bpmValue = Number(packet.bpm ?? NaN);
@@ -84,7 +84,7 @@ export function useBluetooth() {
             bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
             color:       typeof packet.color === "string" ? packet.color : prev.color,
             min:         typeof packet.color === "number" ? packet.max : prev.min,
-            max:         typeof packet.color === "number" ? packet.max : prev.min,
+            max:         typeof packet.color === "number" ? packet.max : prev.max,
             lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
             sampleCount: sampleCountRef.current,
         }));

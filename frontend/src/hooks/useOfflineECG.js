@@ -15,10 +15,10 @@ export function useOfflineECG(csvPath) {
     const samplesRef  = useRef([]);   // [{ t: ms, ecg: float }]
     const playIdxRef  = useRef(0);
     const intervalRef = useRef(null); 
-    const fsRef       = useRef(360);
+    const fsRef       = useRef(300);
 
     const [metrics, setMetrics] = useState({
-        bpm: "--", color: "NONE", min: 0, max: 0,
+        bpm: 0, color: "NONE", min: 0, max: 0,
         lastRPeak: null, connected: false, sampleCount: 0, mode: "offline",
     });
 
@@ -41,6 +41,14 @@ export function useOfflineECG(csvPath) {
             lastRPeak: null, connected: false, sampleCount: 0, mode: "offline",
         });
 
+        // Petición HTTP al endpoint POST de FastAPI para resetear filtros del archivo previo
+        fetch("http://localhost:8000/process-csv", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ raw: new Array(10).fill(2000), fs: 300, reset: true })
+        }).catch(() => console.warn("[Offline] No se pudo inicializar reset en backend"));
+
+        // Cargar el archivo estatico
         fetch(csvPath)
             .then(res => {
                 if (!res.ok) throw new Error(`No se pudo cargar ${csvPath}`);
@@ -56,6 +64,7 @@ export function useOfflineECG(csvPath) {
                     const t = Number(parts[0]);
                     const v = Number(parts[1]);
                     if (isNaN(t) || isNaN(v)) continue;
+
                     // Normalizar tiempo a ms:
                     const tMs = t < 10000 ? Math.round(t * 1000) : t;
                     samples.push({ t: tMs, ecg: v });
@@ -89,97 +98,85 @@ export function useOfflineECG(csvPath) {
     }, [csvPath]);
 
     // Arrancar el simulador 
+    // Bucle de streaming hacia el backend (CORREGIDO con async)
     useEffect(() => {
-        // Esperar a que samplesRef se pueble
         const waitId = setInterval(() => {
             if (samplesRef.current.length < WINDOW_SIZE) return;
             clearInterval(waitId);
 
-            const fs       = fsRef.current;
+            const fs = fsRef.current;
+            // Intervalo en ms que durará cada ciclo de envío
             const windowMs = Math.round((WINDOW_SIZE / fs) * 1000 / PLAYBACK_RATE);
 
-            intervalRef.current = setInterval(() => {
+            // AGREGAMOS 'async' AQUÍ ABAJO:
+            intervalRef.current = setInterval(async () => {
                 const samples = samplesRef.current;
                 const start   = playIdxRef.current;
                 const end     = start + WINDOW_SIZE;
                 const slice   = samples.slice(start, end);
 
                 if (slice.length < WINDOW_SIZE) {
-                    // Fin del CSV → reiniciar
-                    playIdxRef.current = 0;
+                    playIdxRef.current = 0; // Bucle infinito al terminar el archivo
                     return;
                 }
                 playIdxRef.current = end < samples.length ? end : 0;
 
-                const raw    = slice.map(s => s.ecg);
-                // baseT: timestamp real del CSV
-                const baseT  = slice[0].t;
+                const rawArray = slice.map(s => s.ecg);
+                const baseT    = slice[0].t;
 
-                // Rango de ventana
-                const minVal = Math.min(...raw);
-                const maxVal = Math.max(...raw);
-                const range  = maxVal - minVal;
+                try {
+                    // Petición HTTP POST enviando la ventana cruda al backend
+                    const response = await fetch("http://localhost:8000/process-csv", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            raw: rawArray,
+                            fs: fs,
+                            t: baseT,
+                            reset: false
+                        })
+                    });
 
-                // Umbral adaptativo e histeresis
-                const umbAlto = range > 200 ? minVal + range * 0.70 : (minVal + maxVal) / 2 + 100;
-                const umbBajo = range > 200 ? minVal + range * 0.40 : (minVal + maxVal) / 2 - 100;
+                    if (!response.ok) return;
+                    const packet = await response.json();
 
-                const peaks  = [];
-                let   arriba = false;
-                const refract = Math.floor(fs * 0.25);
-                let   lastP   = -refract - 1;
+                    const resRaw  = packet.raw      ?? [];
+                    const resFilt = packet.filtered ?? [];
+                    const peaks   = packet.peaks    ?? [];
+                    const len     = Math.min(resRaw.length, resFilt.length);
+                    
+                    if (len === 0) return;
 
-                for (let i = 0; i < raw.length; i++) {
-                    if (!arriba && raw[i] > umbAlto && (i - lastP) > refract) {
-                        arriba = true;
-                        peaks.push(i);
-                        lastP = i;
-                    } else if (arriba && raw[i] < umbBajo) {
-                        arriba = false;
+                    const sampleInterval = 1000 / fs;
+
+                    // Volcar los arreglos sincronizados en los buffers circulares
+                    for (let i = 0; i < len; i++) {
+                        const idx = writeIdxRef.current;
+                        const tSample = baseT + i * sampleInterval;
+                        rawBufRef.current[idx]  = { t: tSample, ecg: Number(resRaw[i])  || 0 };
+                        filtBufRef.current[idx] = { t: tSample, ecg: Number(resFilt[i]) || 0 };
+                        writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
                     }
+
+                    // Convertir los índices de picos retornados a marcas de tiempo ms
+                    if (peaks.length > 0) {
+                        const peakTimes = peaks.map(pi => baseT + pi * sampleInterval);
+                        rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTimes].slice(-50);
+                    }
+
+                    setMetrics(prev => ({
+                        ...prev,
+                        bpm:         packet.bpm > 0 ? packet.bpm : (prev.bpm === "--" ? 0 : prev.bpm),
+                        color:       packet.color ?? "NONE",
+                        min:         packet.min,
+                        max:         packet.max,
+                        lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
+                        sampleCount: prev.sampleCount + len,
+                    }));
+
+                } catch (err) {
+                    console.warn("[Offline] Error de comunicación con FastAPI:", err);
                 }
-
-                // BPM de los ultimos dos picos de la ventana
-                let bpm = 0;
-                if (peaks.length >= 2) {
-                    const rrSamples = peaks[peaks.length - 1] - peaks[peaks.length - 2];
-                    bpm = Math.round(60 / (rrSamples / fs));
-                    // Sanitizar
-                    if (bpm < 20 || bpm > 300) bpm = 0;
-                }
-
-                const color =
-                    bpm > 0   && bpm < 60  ? "BLUE"   :
-                    bpm >= 60 && bpm < 100 ? "GREEN"  :
-                    bpm >= 100&& bpm <=140 ? "YELLOW" :
-                    bpm > 140              ? "RED"    : "NONE";
-
-                // Volcar en buffers 
-                const sampleInterval = 1000 / fs;
-                for (let i = 0; i < raw.length; i++) {
-                    const idx = writeIdxRef.current;
-                    const tSample = baseT + i * sampleInterval;
-                    rawBufRef.current[idx]  = { t: tSample, ecg: raw[i] };
-                    // En offline no hay backend que filtre; filtBuf = raw
-                    filtBufRef.current[idx] = { t: tSample, ecg: raw[i] };
-                    writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
-                }
-
-                // Picos R
-                if (peaks.length > 0) {
-                    const peakTimes = peaks.map(pi => baseT + pi * sampleInterval);
-                    rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTimes].slice(-50);
-                }
-
-                setMetrics(prev => ({
-                    ...prev,
-                    bpm:         bpm > 0 ? bpm : prev.bpm,
-                    color,
-                    min:         minVal,
-                    max:         maxVal,
-                    lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
-                    sampleCount: prev.sampleCount + raw.length,
-                }));
 
             }, windowMs);
         }, 100);
@@ -187,9 +184,8 @@ export function useOfflineECG(csvPath) {
         return () => {
             clearInterval(waitId);
             clearInterval(intervalRef.current);
-            intervalRef.current = null;
         };
-    }, [csvPath]); 
+    }, [csvPath]);         // Verificar el csvPath
 
     // API
     const getBuffer = useCallback((type = "filtered") => {

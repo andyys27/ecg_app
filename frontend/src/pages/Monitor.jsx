@@ -264,13 +264,16 @@ export default function Monitor() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
             <MetricCard label="Frecuencia" value={metrics.bpm}  unit="BPM" color="#4f8ef7" />
             <MetricCard label="SDNN"       value={sdnn}         unit="ms"  color="#7c6af7" />
-            <MetricCard label="RMSSD"      value={rmssd}        unit="ms"  color="#4fc7a4" />
+            
             <MetricCard
               label="Muestras"
               value={typeof metrics.sampleCount === "number"
                 ? metrics.sampleCount.toLocaleString() : "--"}
-              unit="" color="#f7a84f"
+              unit="pts" color="#f7a84f"
             />
+            <div style={{ ...s.card, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.02)" }}>
+              <span style={{ fontSize: 11, color: "#3a4060", fontFamily: "monospace" }}>Filtros SciPy Activos</span>
+            </div>
           </div>
         </div>
 
@@ -302,12 +305,12 @@ export default function Monitor() {
             Altura: 180 en modo simple (offline), 320 en dual-channel
             para dar espacio suficiente a los dos carriles
           */}
-          <div style={{ width: "100%", height: mode === "offline" ? 180 : 320 }}>
+          <div style={{ width: "100%", height: 320 }}>
             <LiveChart
               getBuffer={getBuffer}
               getRPeaks={getRPeaks}
-              dualChannel={mode !== "offline"}
-              signalType="raw"
+              dualChannel={true}
+              signalType="filtered"
               fs={FS}
               theme="app"
             />
@@ -315,12 +318,11 @@ export default function Monitor() {
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
             <span style={{ fontSize: 10, color: "#3a4060" }}>
-              {(VISIBLE_SAMPLES / FS).toFixed(1)}s visibles
-              {mode !== "offline" && " · azul apagado = raw · azul brillante = filtrada"}
+              {(VISIBLE_SAMPLES / FS).toFixed(1)}s visibles · azul apagado = raw · azul brillante = filtrada por Python
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#e24b4a" }} />
-              <span style={{ fontSize: 10, color: "#3a4060" }}>R-peak</span>
+              <span style={{ fontSize: 10, color: "#3a4060" }}>R-peak (SciPy)</span>
             </div>
           </div>
         </div>
