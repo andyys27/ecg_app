@@ -13,6 +13,8 @@ export function useBluetooth() {
     const writeIdxRef    = useRef(0);
     const sampleCountRef = useRef(0);
 
+    const bleFragmentRef = useRef("");
+
     // Picos R acumulados (timestamps en ms)
     const rPeakTimesRef = useRef([]);
     
@@ -20,7 +22,7 @@ export function useBluetooth() {
     const wsRef     = useRef(null);     // WebSocket al backend Python
 
     const [metrics, setMetrics] = useState({
-        bpm:         "--",
+        bpm:         "0",
         color:       "NONE",
         min:         0,
         max:         0,
@@ -37,10 +39,16 @@ export function useBluetooth() {
             const raw  = packet.raw      ?? [];
             const filt = packet.filtered ?? [];
             const len  = Math.min(raw.length, filt.length);
+
+            // Re poblar el buffer circular hacia atras
+            const now = Date.now();
+            const sampleInterval = 1000 / FS;
+
             for (let i = 0; i < len; i++) {
                 const idx = writeIdxRef.current;
-                rawBufRef.current[idx]  = { t: i, ecg: Number(raw[i])  || 0 };
-                filtBufRef.current[idx] = { t: i, ecg: Number(filt[i]) || 0 };
+                const tEst = now - (len - i) * sampleInterval;
+                rawBufRef.current[idx]  = { t: tEst, ecg: Number(raw[i])  || 0 };
+                filtBufRef.current[idx] = { t: tEst, ecg: Number(filt[i]) || 0 };
                 writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
             }
             sampleCountRef.current += len;
@@ -83,7 +91,7 @@ export function useBluetooth() {
             ...prev,
             bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
             color:       typeof packet.color === "string" ? packet.color : prev.color,
-            min:         typeof packet.color === "number" ? packet.max : prev.min,
+            min:         typeof packet.color === "number" ? packet.min : prev.min,
             max:         typeof packet.color === "number" ? packet.max : prev.max,
             lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
             sampleCount: sampleCountRef.current,
