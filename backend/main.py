@@ -1,15 +1,12 @@
 # cd backend
-
 # Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
+    # BT_PORT="/dev/rfcomm0"
 # Activate vEnv: source venv/bin/activate       // Linux
-# Crear entorno virtual: python -m venv .venv   // Windows
 # Activate vEnv: .\.venv\Scripts\Activate.ps1   // Windows
                 # $env:BT_PORT="COM8"
-# COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
 
-# Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-# Activate vEnv: source venv/bin/activate
+                # sudo rfcomm connect 0 D4:E9:F4:E3:3F:C2
+# COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
 
 import asyncio
 import json
@@ -22,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from filters import ECGProcessor
-from reader import BTReader, FakeBTReader
+from reader import BTReader
 
 # Configuracion de logging
 logging.basicConfig(
@@ -33,10 +30,9 @@ log = logging.getLogger("ecg.server")
 
 BT_PORT  = os.getenv("BT_PORT", "")             # Puerto Bluetooth
 ECG_FS   = int(os.getenv("ECG_FS",   "300"))    # Fs de la ESO32
-BUF_SIZE = int(os.getenv("BUF_SIZE", "300"))    # Tamano del buffer de la ESP32
 
 # Estado global
-sample_queue: asyncio.Queue = asyncio.Queue(maxsize=20)
+sample_queue: asyncio.Queue = asyncio.Queue(maxsize=300)
 
 # Procesadores
 processor         : ECGProcessor = ECGProcessor()
@@ -74,12 +70,10 @@ class CsvWindowResponse(BaseModel):
 # Arranca BTReader en background al iniciar
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if BT_PORT:
-        reader = BTReader(port=BT_PORT)
-        log.info(f"Modo hardware: {BT_PORT}")
-    else:
-        reader = FakeBTReader(fs=ECG_FS, buf_size=BUF_SIZE, freq_hz=1.2)
-        log.info("Modo demo: FakeBTReader activo")
+    processor.initialize_filters(ECG_FS)
+
+    reader = BTReader(port=BT_PORT)
+    log.info(f"Modo hardware activo en puerto: {BT_PORT}")
 
     # Lector de BT
     bt_task = asyncio.create_task(reader.start(sample_queue))
@@ -103,30 +97,46 @@ app.add_middleware(
 
 # Tarea de procesamiento y broadcast (online)
 async def process_and_broadcast() -> None:
+    global ws_clients
+    log.info("[Online] Bucle de procesamiento y transmisión iniciado.")
+    muestra_count = 0
+    
     while True:
-        esp32_packet = await sample_queue.get()
+        try:
+            # Despierta de inmediato con la muestra única inyectada por el reader.py
+            esp32_sample = await sample_queue.get() 
 
-        packet = processor.process_window(esp32_packet)
-        if not packet:
-            continue
+            muestra_count += 1
+            if muestra_count % 300 == 0:
+                log.info(f"[Online] Cola activa. Muestras procesadas: {muestra_count}. Último dato: {esp32_sample}")
+                muestra_count = 0
 
-        if ws_clients:
-            msg = json.dumps(packet)
-            dead = set()
-            for ws in ws_clients:
-                try:
-                    await ws.send_text(msg)
-                except Exception:
-                    dead.add(ws)
-            ws_clients -= dead
+            # Cambiamos process_window por el procesador de muestras individuales de filters.py
+            packet = processor.process_single_sample(esp32_sample)
+            if not packet:
+                continue
 
+            # Transmisión directa por WebSockets
+            if ws_clients:
+                msg = json.dumps(packet)
+                dead = set()
+                for ws in ws_clients:
+                    try:
+                        await ws.send_text(msg)
+                    except Exception:
+                        dead.add(ws)
+                ws_clients -= dead
+        
+        except Exception as e:
+            log.error(f"[Online] Error en el bucle de procesamiento: {e}", exc_info=True)
+            await asyncio.sleep(1) # Evita saturar la CPU si entra en un bucle infinito de error
 
 # Endpoints
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "mode":   "hardware" if BT_PORT else "demo",
+        "mode":   "hardware",
         "fs":     ECG_FS,
         "clients": len(ws_clients),
         "offline_processors": list(offline_processors.keys()),
