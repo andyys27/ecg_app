@@ -11,7 +11,7 @@ const FS              = 300;
 const VISIBLE_SAMPLES = 1500;
 
 const RECORDS = [
-  { label: "100 — Ritmo sinusal normal",        path: "/100.csv" },
+  { label: "100 — Ritmo sinusal normal",         path: "/100.csv" },
   { label: "106 — Contracciones ventriculares", path: "/106.csv" },
   { label: "119 — Bigeminismo",                 path: "/119.csv" },
   { label: "208 — Arritmia mixta",              path: "/208.csv" },
@@ -29,11 +29,11 @@ function classifyBPM(bpm) {
 }
 
 const STATE = {
-  idle:     { label: "Sin señal",    accent: "var(--c-idle)",   glyph: "○" },
-  normal:   { label: "Normal",       accent: "var(--c-ok)",     glyph: "♥" },
-  elevated: { label: "Elevado",      accent: "var(--c-warn)",   glyph: "↑" },
-  tachy:    { label: "Taquicardia",  accent: "var(--c-danger)", glyph: "⚡" },
-  brady:    { label: "Bradicardia",  accent: "var(--c-info)",   glyph: "↓" },
+  idle:     { label: "Sin señal",      accent: "var(--c-idle)",   glyph: "○" },
+  normal:   { label: "Normal",         accent: "var(--c-ok)",     glyph: "♥" },
+  elevated: { label: "Elevado",        accent: "var(--c-warn)",   glyph: "↑" },
+  tachy:    { label: "Taquicardia",    accent: "var(--c-danger)", glyph: "⚡" },
+  brady:    { label: "Bradicardia",    accent: "var(--c-info)",   glyph: "↓" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -55,55 +55,43 @@ export default function Monitor() {
   const [session, setSession] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [rrList,  setRrList]  = useState([]);     
-  const [rmssd,   setRmssd]   = useState("--");   
-  const [lastRR,  setLastRR]  = useState("--");   
   const [wsUrl,   setWsUrl]   = useState(`ws://${window.location.hostname}:8000/ws`);
 
   const timerRef = useRef(null);
   const startRef = useRef(null);
 
-  const offlineData = useOfflineECG(csvPath);
+  const offlineData = useOfflineECG(csvPath, mode === "offline");
   const btData      = useBluetooth();
   const activeData  = mode === "offline" ? offlineData : btData;
   const { metrics, getBuffer, getRPeaks } = activeData;
 
-  // Pipeline de Procesamiento de Métricas
+  // ── Estados Derivados (Evitan renders infinitos y limpian el pipeline) ──
+  const bpmValid = Number(metrics.bpm);
+  const lastRR = (!isNaN(bpmValid) && bpmValid > 0) ? Math.round((60 / bpmValid) * 1000) : "--";
+
+  // Actualización del histórico de intervalos R-R
   useEffect(() => {
-    let currentRR = "--";
-
-    if (metrics.bpm && metrics.bpm !== "--" && Number(metrics.bpm) > 0) {
-      const bpmValid = Number(metrics.bpm);
-      const calculatedRR = Math.round((60 / bpmValid) * 1000);
-      currentRR = calculatedRR;
-      setLastRR(calculatedRR);
-    } else {
-      setLastRR("--");
-    }
-
-    if (mode !== "offline" && metrics.rmssd != null && metrics.rmssd > 0) {
-      setRmssd(Math.round(metrics.rmssd));
-      return;
-    }
-
-    if (currentRR !== "--") {
+    if (lastRR !== "--") {
       setRrList(prev => {
-        if (prev.length > 0 && prev[prev.length - 1] === currentRR) return prev;
-        const updatedList = [...prev.slice(-30), currentRR];
-        
-        if (updatedList.length >= 4) {
-          let sumDiffSquares = 0;
-          for (let i = 1; i < updatedList.length; i++) {
-            const diff = updatedList[i] - updatedList[i - 1];
-            sumDiffSquares += diff * diff;
-          }
-          const calculatedRmssd = Math.round(Math.sqrt(sumDiffSquares / (updatedList.length - 1)));
-          setRmssd(calculatedRmssd > 0 ? calculatedRmssd : 18);
-        }
-        
-        return updatedList;
+        if (prev.length > 0 && prev[prev.length - 1] === lastRR) return prev;
+        return [...prev.slice(-29), lastRR]; // Mantiene una ventana de los últimos 30 latidos
       });
     }
-  }, [metrics.bpm, metrics.rmssd, mode]);
+  }, [lastRR]);
+
+  // Cálculo de RMSSD en tiempo real para visualización
+  let displayRmssd = "--";
+  if (mode !== "offline" && metrics.rmssd != null && metrics.rmssd > 0) {
+    displayRmssd = Math.round(metrics.rmssd);
+  } else if (rrList.length >= 4) {
+    let sumDiffSquares = 0;
+    for (let i = 1; i < rrList.length; i++) {
+      const diff = rrList[i] - rrList[i - 1];
+      sumDiffSquares += diff * diff;
+    }
+    const calculatedRmssd = Math.round(Math.sqrt(sumDiffSquares / (rrList.length - 1)));
+    displayRmssd = calculatedRmssd > 0 ? calculatedRmssd : 18;
+  }
 
   // Timer de sesión clínica
   useEffect(() => {
@@ -114,7 +102,7 @@ export default function Monitor() {
       );
     } else {
       clearInterval(timerRef.current);
-      setElapsed(0); setRrList([]); setRmssd("--"); setLastRR("--");
+      setElapsed(0); setRrList([]);
     }
     return () => clearInterval(timerRef.current);
   }, [session]);
@@ -126,10 +114,13 @@ export default function Monitor() {
 
   const stateKey = classifyBPM(metrics.bpm);
   const st       = STATE[stateKey];
+  
+  // Guardrail para evitar inicializar grabación sin hardware listo
+  const canStartSession = mode === "offline" || isConnected;
 
   // Persistencia en Supabase
   async function startSession() {
-    if (!user) return;
+    if (!user || !canStartSession) return;
     const { data, error } = await supabase.from("sessions").insert({
       user_id: user.id, modo: mode,
       registro_mitbih: mode === "offline" ? csvPath : null,
@@ -142,17 +133,25 @@ export default function Monitor() {
     clearInterval(timerRef.current);
     const bpm = Number(metrics.bpm);
     
-    const intervals = [];
-    for (let i = 1; i < rrList.length; i++) intervals.push(rrList[i] - rrList[i-1]);
-    let sdnn = null, finalRmssd = null;
-    if (intervals.length >= 2) {
-      const mean = intervals.reduce((a,b) => a+b,0) / intervals.length;
-      sdnn = Math.round(Math.sqrt(intervals.reduce((a,b) => a+(b-mean)**2,0) / intervals.length));
-      const diffs = [];
-      for (let i = 1; i < intervals.length; i++) diffs.push((intervals[i]-intervals[i-1])**2);
-      finalRmssd = Math.round(Math.sqrt(diffs.reduce((a,b)=>a+b,0)/diffs.length));
-    } else if (rmssd !== "--") {
-      finalRmssd = Number(rmssd);
+    let sdnn = null;
+    let finalRmssd = null;
+
+    // ── MÉTROLOGÍA DE VARIABILIDAD CARDÍACA (HRV) CORREGIDA ──
+    if (rrList.length >= 2) {
+      // 1. SDNN: Desviación estándar de los intervalos R-R puros
+      const meanRR = rrList.reduce((a, b) => a + b, 0) / rrList.length;
+      const varianceRR = rrList.reduce((a, b) => a + (b - meanRR) ** 2, 0) / rrList.length;
+      sdnn = Math.round(Math.sqrt(varianceRR));
+
+      // 2. RMSSD: Raíz cuadrada de la media de las diferencias sucesivas al cuadrado
+      let sumDiffSquares = 0;
+      for (let i = 1; i < rrList.length; i++) {
+        const diff = rrList[i] - rrList[i - 1];
+        sumDiffSquares += diff * diff;
+      }
+      finalRmssd = Math.round(Math.sqrt(sumDiffSquares / (rrList.length - 1)));
+    } else if (displayRmssd !== "--") {
+      finalRmssd = Number(displayRmssd);
     }
 
     const estado = { idle:"indefinido", normal:"normal", elevated:"elevado",
@@ -314,7 +313,15 @@ export default function Monitor() {
           box-shadow: 0 4px 20px color-mix(in srgb, var(--c-accent) 30%, transparent);
           transition: opacity 0.15s, transform 0.1s;
         }
-        .mon-btn-start:hover { opacity: 0.9; transform: translateY(-1px); }
+        .mon-btn-start:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .mon-btn-start:disabled {
+          background: var(--c-panel);
+          color: var(--c-muted);
+          border: 1px solid var(--c-border);
+          box-shadow: none;
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
         .mon-btn-stop {
           background: color-mix(in srgb, var(--c-danger) 12%, transparent);
           color: var(--c-danger);
@@ -414,7 +421,7 @@ export default function Monitor() {
                 <div className="mon-state-label" style={{ color: st.accent }}>{st.label}</div>
                 <div className="mon-state-desc" style={{ marginTop:4 }}>
                   {stateKey === "idle" ? "Esperando datos..." :
-                   stateKey === "normal" ? "Ritmo sinusal stable" :
+                   stateKey === "normal" ? "Ritmo sinusal estable" :
                    stateKey === "elevated" ? "FC por encima del umbral" :
                    stateKey === "tachy" ? "Frecuencia muy elevada" :
                    "Frecuencia muy baja"}
@@ -428,7 +435,7 @@ export default function Monitor() {
               )}
             </div>
 
-            {/* Panel de Métricas (3 Columnas Limpias) */}
+            {/* Panel de Métricas */}
             <div className="mon-metrics">
 
               {/* 1. Frecuencia Cardíaca */}
@@ -516,7 +523,6 @@ export default function Monitor() {
               />
             </div>
 
-
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
               <div className="mon-indicator-panel">
                 <div className="mon-indicator-badge">
@@ -554,11 +560,13 @@ export default function Monitor() {
                   ? `Sesión activa · ${fmtSec(elapsed)} transcurridos · los datos se guardarán al terminar.`
                   : mode === "offline"
                   ? "Modo de validación con registros MIT-BIH. Inicia una sesión para guardar las métricas."
-                  : "Conecta el ESP32 e inicia una sesión para registrar los datos en tu historial."}
+                  : isConnected
+                  ? "ESP32 Vinculado con éxito. Presiona 'Iniciar Sesión' para comenzar a almacenar el historial."
+                  : "Por favor, establece conexión con el nodo ESP32 mediante BLE o WebSocket antes de iniciar sesión."}
               </p>
             </div>
             {!session
-              ? <button className="mon-btn-start" onClick={startSession}>
+              ? <button className="mon-btn-start" onClick={startSession} disabled={!canStartSession}>
                   <i className="ti ti-player-play" style={{ fontSize:14 }} />
                   Iniciar sesión
                 </button>

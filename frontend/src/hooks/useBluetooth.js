@@ -91,8 +91,8 @@ export function useBluetooth() {
             ...prev,
             bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
             color:       typeof packet.color === "string" ? packet.color : prev.color,
-            min:         typeof packet.color === "number" ? packet.min : prev.min,
-            max:         typeof packet.color === "number" ? packet.max : prev.max,
+            min:         typeof packet.min === "number" ? packet.min : prev.min,
+            max:         typeof packet.max === "number" ? packet.max : prev.max,
             lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
             sampleCount: sampleCountRef.current,
         }));

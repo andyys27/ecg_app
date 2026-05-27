@@ -4,7 +4,7 @@ const BUFFER_SIZE   = 3000;
 const PLAYBACK_RATE = 1.0;
 const WINDOW_SIZE   = 20;   
 
-export function useOfflineECG(csvPath) {
+export function useOfflineECG(csvPath, active = true) {
     // Buffers circulares
     const rawBufRef  = useRef(new Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
     const filtBufRef = useRef(new Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
@@ -25,6 +25,12 @@ export function useOfflineECG(csvPath) {
     // Cargar CSV cuando cambia csvPath
     useEffect(() => {
         // Detener el intervalo anterior inmediatamente
+        if (!active) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+            return;
+        }
+
         clearInterval(intervalRef.current);
         intervalRef.current = null;
 
@@ -95,11 +101,13 @@ export function useOfflineECG(csvPath) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
         };
-    }, [csvPath]);
+    }, [csvPath, active]);
 
     // Arrancar el simulador 
     // Bucle de streaming hacia el backend (CORREGIDO con async)
     useEffect(() => {
+        if (!active) return;
+
         const waitId = setInterval(() => {
             if (samplesRef.current.length < WINDOW_SIZE) return;
             clearInterval(waitId);
@@ -185,7 +193,7 @@ export function useOfflineECG(csvPath) {
             clearInterval(waitId);
             clearInterval(intervalRef.current);
         };
-    }, [csvPath]);         // Verificar el csvPath
+    }, [csvPath, active]);         // Verificar el csvPath
 
     // API
     const getBuffer = useCallback((type = "filtered") => {
