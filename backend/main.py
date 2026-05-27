@@ -1,4 +1,5 @@
 # cd backend
+
 # Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 # Activate vEnv: source venv/bin/activate       // Linux
@@ -6,6 +7,9 @@
 # Activate vEnv: .\.venv\Scripts\Activate.ps1   // Windows
                 # $env:BT_PORT="COM8"
 # COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
+
+# Run: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# Activate vEnv: source venv/bin/activate
 
 import asyncio
 import json
@@ -70,11 +74,6 @@ class CsvWindowResponse(BaseModel):
 # Arranca BTReader en background al iniciar
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── INICIALIZACIÓN VITAL ──
-    # Seteamos la frecuencia de muestreo para que los filtros calculen sus coeficientes
-    processor.initialize_filters(ECG_FS) 
-    log.info(f"Filtros online inicializados a {ECG_FS} Hz")
-
     if BT_PORT:
         reader = BTReader(port=BT_PORT)
         log.info(f"Modo hardware: {BT_PORT}")
@@ -82,7 +81,9 @@ async def lifespan(app: FastAPI):
         reader = FakeBTReader(fs=ECG_FS, buf_size=BUF_SIZE, freq_hz=1.2)
         log.info("Modo demo: FakeBTReader activo")
 
+    # Lector de BT
     bt_task = asyncio.create_task(reader.start(sample_queue))
+    # Procesador y broadcast
     proc_task = asyncio.create_task(process_and_broadcast())
 
     yield
@@ -102,68 +103,23 @@ app.add_middleware(
 
 # Tarea de procesamiento y broadcast (online)
 async def process_and_broadcast() -> None:
-    import math
-    import random
-    t_offset = 0.0
-
     while True:
-        try:
-            esp32_packet = await sample_queue.get()
+        esp32_packet = await sample_queue.get()
 
-            # Generador Sintético de ECG Completo
-            ecg_simulado = []
-            for i in range(300):
-                t = (i / 300.0) * 1.0
-                valor = 2048.0
-            
-                # Onda P
-                if 0.15 <= t <= 0.25:
-                    valor += 150 * math.sin(math.pi * (t - 0.15) / 0.10)
-                # Complejo QRS
-                if 0.28 <= t <= 0.30:
-                    valor -= 200 * math.sin(math.pi * (t - 0.28) / 0.02)
-                elif 0.30 <= t <= 0.34:
-                    valor += 1800 * math.sin(math.pi * (t - 0.30) / 0.04)
-                elif 0.34 <= t <= 0.36:
-                    valor -= 300 * math.sin(math.pi * (t - 0.34) / 0.02)
-                # Onda T
-                if 0.45 <= t <= 0.65:
-                    valor += 300 * math.sin(math.pi * (t - 0.45) / 0.20)
-                
-                valor += random.uniform(-10, 10)
-                ecg_simulado.append(int(max(0, min(4095, valor))))
+        packet = processor.process_window(esp32_packet)
+        if not packet:
+            continue
 
-            # Mapeamos a todas las posibles llaves para blindar el filtro
-            esp32_packet["raw"] = ecg_simulado
-            esp32_packet["data"] = ecg_simulado
-            esp32_packet["signal"] = ecg_simulado
+        if ws_clients:
+            msg = json.dumps(packet)
+            dead = set()
+            for ws in ws_clients:
+                try:
+                    await ws.send_text(msg)
+                except Exception:
+                    dead.add(ws)
+            ws_clients -= dead
 
-            packet = processor.process_window(esp32_packet)
-            if not packet:
-                log.warning("El procesador ECG rebotó la ventana de datos")
-                continue
-
-            # Proteccion interfaz de ususario
-            if not packet.get("bpm") or packet["bpm"] == 0.0:
-                packet["bpm"] = 72.0
-                if "color" not in packet or packet["color"] == "NONE":
-                    packet["color"] = "NORMAL"
-
-            packet["type"] = "update"
-
-            if ws_clients:
-                msg = json.dumps(packet)
-                dead = set()
-                for ws in ws_clients:
-                    try:
-                        await ws.send_text(msg)
-                    except Exception:
-                        dead.add(ws)
-                ws_clients -= dead
-        
-        except Exception as e:
-            log.error(f"Error en bucle de transmisión en tiempo real: {e}", exc_info=True)
-            await asyncio.sleep(0.1)
 
 # Endpoints
 @app.get("/")
