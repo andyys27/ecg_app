@@ -1,25 +1,21 @@
-// VERIFICAR LA FLUIDEZ DE LA APLICACION EN FRONTEND PARA VER SI CAMBIAR A UTILIZAR MUESTRA A MUESTRA EN LUGAR DE VENTANAS
+import { useState, useRef, useCallback } from "react";
 
-import { useState, useRef, useCallback, use } from "react";
-
-// Constantes
-const BUFFER_SIZE = 3000;   // 300 Hz x 10 s
-const FS          = 300;    // Debe coincidir con ECG_FS del backend
+const BUFFER_SIZE = 3000;   // 300 Hz x 10 segundos de almacenamiento
+const FS          = 300;    // Frecuencia de muestreo síncrona con el backend
+const SAMPLE_TIME = 1000 / FS; // ~3.33ms por muestra
 
 export function useBluetooth() {
-    // Buffers circulares
+    // Buffers circulares basados en referencias (Evitan re-renders destructivos)
     const rawBufRef      = useRef(new Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
     const filtBufRef     = useRef(new Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
     const writeIdxRef    = useRef(0);
     const sampleCountRef = useRef(0);
 
     const bleFragmentRef = useRef("");
-
-    // Picos R acumulados (timestamps en ms)
-    const rPeakTimesRef = useRef([]);
+    const rPeakTimesRef  = useRef([]);
     
     const deviceRef = useRef(null);
-    const wsRef     = useRef(null);     // WebSocket al backend Python
+    const wsRef     = useRef(null);
 
     const [metrics, setMetrics] = useState({
         bpm:         "--",
@@ -29,85 +25,84 @@ export function useBluetooth() {
         lastRPeak:   null,
         connected:   false,
         sampleCount: 0,
-        mode:        "websocket", // "websocket | ble-direct"
+        mode:        "websocket",
     });
 
-    // Procesador de paquetes del backend
+    // Pipeline unificado de procesamiento de paquetes
     const handlePacket = useCallback((packet) => {
-        // Snapshot inicial al conectarse
-        if (packet.type === "snapshot") {
-            const raw  = packet.raw      ?? [];
-            const filt = packet.filtered ?? [];
-            const len  = Math.min(raw.length, filt.length);
+        
+        // ── CASO A: SNAPSHOT INICIAL (Formato Vectorial/Array) ──
+        if (packet.type === "snapshot" || Array.isArray(packet.raw)) {
+            const rawArr  = packet.raw      ?? [];
+            const filtArr = packet.filtered ?? [];
+            const len     = Math.min(rawArr.length, filtArr.length);
 
-            // Re poblar el buffer circular hacia atras
             const now = Date.now();
-            const sampleInterval = 1000 / FS;
-
+            
             for (let i = 0; i < len; i++) {
                 const idx = writeIdxRef.current;
-                const tEst = now - (len - i) * sampleInterval;
-                rawBufRef.current[idx]  = { t: tEst, ecg: Number(raw[i])  || 0 };
-                filtBufRef.current[idx] = { t: tEst, ecg: Number(filt[i]) || 0 };
-                writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
+                // Reconstrucción retrógrada del vector de tiempo absoluto
+                const tEst = now - (len - i) * SAMPLE_TIME;
+                
+                rawBufRef.current[idx]  = { t: tEst, ecg: Number(rawArr[i])  || 0 };
+                filtBufRef.current[idx] = { t: tEst, ecg: Number(filtArr[i]) || 0 };
+                writeIdxRef.current     = (idx + 1) % BUFFER_SIZE;
             }
             sampleCountRef.current += len;
             return;
         }
 
-        // Paquete normal de ventana
-        const raw   = packet.raw      ?? [];
-        const filt  = packet.filtered ?? [];
-        const peaks = packet.peaks    ?? [];
+        // ── CASO B: STREAMING EN TIEMPO REAL (Formato Escalar Muestra a Muestra) ──
+        if (typeof packet.raw === "number" || typeof packet.filtered === "number") {
+            const idx = writeIdxRef.current;
+            
+            // Generación de base de tiempo lineal continua para evitar desfases con el Canvas
+            const lastIdx  = (idx - 1 + BUFFER_SIZE) % BUFFER_SIZE;
+            const lastT    = rawBufRef.current[lastIdx]?.t || Date.now();
+            const currentT = lastT + SAMPLE_TIME;
 
-        const baseT = typeof packet.t === "number" ? packet.t : Date.now();
-        const sampleInterval = 1000 / FS    // ms entre muestras
-
-        // Volcar la ventana completa en el buffer circular
-        const len = Math.min(raw.length, filt.length);
-        for (let i = 0; i < len; i++) {
-            const idx = writeIdxRef.current
-            rawBufRef.current[idx] = {
-                t:   baseT + i * sampleInterval,
-                ecg: Number(raw[i]) || 0,
-            };
-            filtBufRef.current[idx] = {
-                t:   baseT + i * sampleInterval,
-                ecg: Number(filt[i]) || 0,
-            };
+            // Inserción directa en buffers circulares (O(1))
+            rawBufRef.current[idx]  = { t: currentT, ecg: Number(packet.raw) || 0 };
+            filtBufRef.current[idx] = { t: currentT, ecg: Number(packet.filtered) || 0 };
+            
             writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
+            sampleCountRef.current += 1;
+
+            // Gestión síncrona del marcador de picos R
+            if (packet.is_r_peak === true) {
+                rPeakTimesRef.current = [...rPeakTimesRef.current, currentT].slice(-50);
+            }
+
+            // 🧠 ESTRANGULAMIENTO DE UI (Throttling):
+            // Actualizar el estado de React a 300Hz colapsa la app.
+            // Forzamos el renderizado solo cada 15 muestras (~20Hz) o inmediatamente si ocurre un QRS.
+            if (sampleCountRef.current % 15 === 0 || packet.is_r_peak === true) {
+                const bpmValue = Number(packet.bpm ?? NaN);
+                
+                setMetrics(prev => ({
+                    ...prev,
+                    bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
+                    color:       typeof packet.color === "string" ? packet.color : prev.color,
+                    min:         typeof packet.min === "number" ? packet.min : prev.min,
+                    max:         typeof packet.max === "number" ? packet.max : prev.max,
+                    lastRPeak:   packet.is_r_peak ? currentT : prev.lastRPeak,
+                    sampleCount: sampleCountRef.current,
+                }));
+            }
         }
-        sampleCountRef.current += len;
-
-        // Convertir indices de picos a timestamps 
-        if (peaks.length > 0) {
-            const peakTime = peaks.map(idx => baseT + idx * sampleInterval);
-            rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTime].slice(-50);
-        }
-
-        const bpmValue = Number(packet.bpm ?? NaN);
-
-        setMetrics(prev => ({
-            ...prev,
-            bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
-            color:       typeof packet.color === "string" ? packet.color : prev.color,
-            min:         typeof packet.min === "number" ? packet.min : prev.min,
-            max:         typeof packet.max === "number" ? packet.max : prev.max,
-            lastRPeak:   rPeakTimesRef.current.at(-1) ?? prev.lastRPeak,
-            sampleCount: sampleCountRef.current,
-        }));
     }, []);
 
-    // Backend en localhost (dev) o Railway (prod)
+    // Conexión y ciclo de vida del WebSocket
     const connectWS = useCallback((url = "ws://localhost:8000/ws") => {
         if (wsRef.current?.readyState === WebSocket.OPEN) return;
         
+        console.log("[WS] Intentando conectar a:", url);
         const ws = new WebSocket(url);
         wsRef.current = ws;
 
         ws.onopen = () => {
-            setMetrics(prev => ({...prev, connected: true, mode: "websocket"}));
-            console.log("[WS] Conectado a", url);
+            setMetrics(prev => ({ ...prev, connected: true, mode: "websocket" }));
+            console.log("[WS] Canal de instrumentación abierto.");
         };
 
         ws.onmessage = (event) => {
@@ -115,39 +110,44 @@ export function useBluetooth() {
                 const packet = JSON.parse(event.data);
                 handlePacket(packet);
             } catch {
-                console.warn("[WS] JSON invalido:", event.data.slice(0, 80));
+                // Ignora strings de control vacíos
             }
         };
 
         ws.onclose = () => {
-            setMetrics(prev => ({ ...prev, connected: false}));
-            console.log("[WS] Desconectado");
-        }
+            setMetrics(prev => ({ ...prev, connected: false }));
+            console.log("[WS] Canal cerrado.");
+        };
 
-        ws.onerror = (err) => console.error("[WS] Error:", err);
+        ws.onerror = (err) => {
+            console.error("[WS] Error crítico de red:", err);
+        };
     }, [handlePacket]);
 
     const disconnectWS = useCallback(() => {
-        wsRef.current?.close();
-        setMetrics(prev => ({ ...prev, connected: false}))
+        if (wsRef.current) {
+            wsRef.current.close();
+            wsRef.current = null;
+        }
+        setMetrics(prev => ({ ...prev, connected: false }));
     }, []);
 
-    // Conexion BLE directa
+    // Conexión Directa mediante Web Bluetooth API
     const BLE_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
     const BLE_CHAR    = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
     const handleBLENotification = useCallback((event) => {
         const text = new TextDecoder().decode(event.target.value);
-
         bleFragmentRef.current += text;
+        
         if (!bleFragmentRef.current.endsWith("}")) return;
 
         try {
             const packet = JSON.parse(bleFragmentRef.current);
             bleFragmentRef.current = "";
-
-            const withFilt = { ...packet, filtered: packet.raw ?? [] };
-            handlePacket(withFilt);
+            // Adaptamos la inyección cruda del firmware para que pase por el pipeline
+            const sample = { ...packet, filtered: packet.filtered ?? packet.raw ?? 0 };
+            handlePacket(sample);
         } catch {
             bleFragmentRef.current = "";
         }
@@ -173,21 +173,23 @@ export function useBluetooth() {
             char.addEventListener("characteristicvaluechanged", handleBLENotification);
 
             setMetrics(prev => ({ ...prev, connected: true, mode: "ble-direct" }));
-            console.log("[BLE] Conectado a", device.name);
+            console.log("[BLE] Enlazado con", device.name);
         } catch (err) {
-            console.error("[BLE] Error:", err);
+            console.error("[BLE] Error en emparejamiento:", err);
         }
     }, [handleBLENotification]);
 
     const disconnectBLE = useCallback(() => {
-        if (deviceRef.current?.gatt.connected) deviceRef.current.gatt.disconnect();
+        if (deviceRef.current?.gatt.connected) {
+            deviceRef.current.gatt.disconnect();
+        }
         setMetrics(prev => ({ ...prev, connected: false }));
     }, []);
 
-    // Lectura del buffer
+    // Extracción segura de datos ordenados para el canvas del LiveChart
     const getBuffer = useCallback((type = "filtered") => {
         const buf = type === "raw" ? rawBufRef.current : filtBufRef.current;
-        const idx = writeIdxRef.current
+        const idx = writeIdxRef.current;
         return [...buf.slice(idx), ...buf.slice(0, idx)];
     }, []);
 

@@ -8,6 +8,8 @@
                 # sudo rfcomm connect 0 D4:E9:F4:E3:3F:C2
 # COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
 
+# npx wscat -c ws://localhost:8000/ws
+
 import asyncio
 import json
 import logging
@@ -105,11 +107,6 @@ async def process_and_broadcast() -> None:
         try:
             # Despierta de inmediato con la muestra única inyectada por el reader.py
             esp32_sample = await sample_queue.get() 
-
-            muestra_count += 1
-            if muestra_count % 300 == 0:
-                log.info(f"[Online] Cola activa. Muestras procesadas: {muestra_count}. Último dato: {esp32_sample}")
-                muestra_count = 0
 
             # Cambiamos process_window por el procesador de muestras individuales de filters.py
             packet = processor.process_single_sample(esp32_sample)
