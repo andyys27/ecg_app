@@ -29,3 +29,5 @@ backend/__pycache__/
 backend/venv/
 backend/*.pyc
 backend/.venv/
+
+repomix-output.xml

@@ -1,0 +1,35 @@
+# Core Framework & Web Server
+fastapi==0.109.0              
+uvicorn[standard]==0.27.0     
+pydantic==2.6.1               
+
+# CORS & Middleware
+python-multipart==0.0.6       
+
+# Signal Processing and Numerical Calculus
+numpy==1.26.3                 
+scipy==1.12.0                 
+
+# Hardware & Comunicaciones
+pyserial==3.5                 
+websockets==12.0              
+
+# Logging & Debugging
+python-dotenv==1.0.0          
+
+# Database & ORM (Supabase)
+supabase==2.4.0              
+postgrest-py==0.10.9         
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0  
+PyJWT==2.8.1                      
+cryptography==41.0.7              
+
+# Installation Instructions:
+# python3 -m venv venv
+# source venv/bin/activate  # On Windows: venv\Scripts\activate
+# pip install -r requirements.txt
+#
+# Run Backend:
+# uvicorn backend.main:app --reload --host 0.0.0.0 --port 5000
