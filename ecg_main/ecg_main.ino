@@ -31,7 +31,7 @@ void setup() {
 }
 
 void loop() {
-    // 1. Adquisición de datos desde la ISR
+    // 1. Adquisición de datos 
     if (hayMuestra) {
         portENTER_CRITICAL(&timerMux); // Protege las variables compartidas
         hayMuestra = false;

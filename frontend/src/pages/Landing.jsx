@@ -109,7 +109,7 @@ export default function Landing() {
   );
 }
 
-// ── Estilos ──────────────────────────────────────────────
+// Estilos 
 const s = {
   page: {
     background:  "#0d1117",

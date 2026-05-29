@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-// ── Paleta por tema (Sincronizada con las variables CSS de Monitor) ──
+// Paleta por tema
 const THEMES = {
   terminal: {
     background: "#0a0f0a",
@@ -36,7 +36,7 @@ export default function LiveChart({
   signalType   = "filtered",
   dualChannel  = false,
   fs           = 300,
-  theme        = "app", // Cambiado por defecto a "app" para acoplarse al monitor
+  theme        = "app", 
 }) {
   const COLORS    = THEMES[theme] ?? THEMES.app;
   const canvasRef = useRef(null);
@@ -58,7 +58,7 @@ export default function LiveChart({
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    // Grilla Médica / Milimetrada Estilo Osciloscopio
+    // Grilla Médica 
     function drawGrid(W, H, yOffset = 0, height = H) {
       // 1. Líneas horizontales estáticas (Eje Y / Amplitud)
       ctx.lineWidth   = 0.5;
@@ -107,7 +107,7 @@ export default function LiveChart({
       const n = slice.length;
       if (n < 2) return;
 
-      // Normalización auto-escalable independiente por carril (Previene saturación visual)
+      // Normalización auto-escalable independiente por carril 
       let minV = Infinity, maxV = -Infinity;
       for (let i = 0; i < n; i++) {
         if (slice[i].ecg < minV) minV = slice[i].ecg;

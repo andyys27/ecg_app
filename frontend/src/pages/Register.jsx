@@ -21,7 +21,7 @@ export default function Register() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
-  // Paso 1 → Paso 2
+  // Paso 1
   function handleStep1(e) {
     e.preventDefault();
     setError("");
@@ -36,7 +36,7 @@ export default function Register() {
     setStep(1);
   }
 
-  // Paso 2 → Registro final
+  // Registro final
   async function handleStep2(e) {
     e.preventDefault();
     setError("");
@@ -104,7 +104,7 @@ export default function Register() {
           ))}
         </div>
 
-        {/* ── Paso 0: Cuenta ── */}
+        {/* Paso 0: Cuenta */}
         {step === 0 && (
           <>
             <h1 style={s.title}>Crear cuenta</h1>
@@ -128,7 +128,7 @@ export default function Register() {
           </>
         )}
 
-        {/* ── Paso 1: Perfil médico ── */}
+        {/* Paso 1: Perfil médico*/}
         {step === 1 && (
           <>
             <h1 style={s.title}>Perfil médico</h1>
@@ -179,7 +179,7 @@ export default function Register() {
           </>
         )}
 
-        {/* ── Paso 2: Confirmación ── */}
+        {/* Paso 2: Confirmación*/}
         {step === 2 && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <div style={{
@@ -210,7 +210,7 @@ export default function Register() {
   );
 }
 
-// ── Componentes auxiliares ─────────────────────────────
+// Componentes auxiliares
 function Field({ label, name, type = "text", placeholder, value, onChange, required }) {
   return (
     <div>
@@ -234,7 +234,7 @@ function ErrorBox({ msg }) {
   );
 }
 
-// ── Estilos ────────────────────────────────────────────
+// Estilos 
 const s = {
   page: {
     background: "#0d1117", minHeight: "100vh",

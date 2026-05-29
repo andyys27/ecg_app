@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 
-const BUFFER_SIZE = 3000;   // 300 Hz x 10 segundos de almacenamiento
-const FS          = 300;    // Frecuencia de muestreo síncrona con el backend
-const SAMPLE_TIME = 1000 / FS; // ~3.33ms por muestra
+const BUFFER_SIZE = 3000;       // 300 Hz x 10 segundos de almacenamiento
+const FS          = 300;        // Frecuencia de muestreo síncrona con el backend
+const SAMPLE_TIME = 1000 / FS;  // ~3.33ms por muestra
 
 export function useBluetooth() {
     // Buffers circulares basados en referencias (Evitan re-renders destructivos)
@@ -31,7 +31,7 @@ export function useBluetooth() {
     // Pipeline unificado de procesamiento de paquetes
     const handlePacket = useCallback((packet) => {
         
-        // ── CASO A: SNAPSHOT INICIAL (Formato Vectorial/Array) ──
+        // CASO A: SNAPSHOT INICIAL 
         if (packet.type === "snapshot" || Array.isArray(packet.raw)) {
             const rawArr  = packet.raw      ?? [];
             const filtArr = packet.filtered ?? [];
@@ -52,7 +52,7 @@ export function useBluetooth() {
             return;
         }
 
-        // ── CASO B: STREAMING EN TIEMPO REAL (Formato Escalar Muestra a Muestra) ──
+        // CASO B: STREAMING EN TIEMPO REAL 
         if (typeof packet.raw === "number" || typeof packet.filtered === "number") {
             const idx = writeIdxRef.current;
             
@@ -73,8 +73,7 @@ export function useBluetooth() {
                 rPeakTimesRef.current = [...rPeakTimesRef.current, currentT].slice(-50);
             }
 
-            // 🧠 ESTRANGULAMIENTO DE UI (Throttling):
-            // Actualizar el estado de React a 300Hz colapsa la app.
+            // ESTRANGULAMIENTO DE UI (Throttling):
             // Forzamos el renderizado solo cada 15 muestras (~20Hz) o inmediatamente si ocurre un QRS.
             if (sampleCountRef.current % 15 === 0 || packet.is_r_peak === true) {
                 const bpmValue = Number(packet.bpm ?? NaN);

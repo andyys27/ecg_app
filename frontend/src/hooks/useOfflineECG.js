@@ -104,7 +104,6 @@ export function useOfflineECG(csvPath, active = true) {
     }, [csvPath, active]);
 
     // Arrancar el simulador 
-    // Bucle de streaming hacia el backend (CORREGIDO con async)
     useEffect(() => {
         if (!active) return;
 

@@ -6,7 +6,7 @@ import { useOfflineECG }  from "../hooks/useOfflineECG";
 import { useBluetooth }   from "../hooks/useBluetooth";
 import LiveChart          from "../components/LiveChart";
 
-// ── Constantes ────────────────────────────────────────────────
+// Constantes 
 const FS              = 300;
 const VISIBLE_SAMPLES = 1500;
 
@@ -17,7 +17,7 @@ const RECORDS = [
   { label: "208 — Arritmia mixta",              path: "/208.csv" },
 ];
 
-// ── Clasificación ─────────────────────────────────────────────
+// Clasificación 
 function classifyBPM(bpm) {
   const b = Number(bpm);
 
@@ -36,7 +36,7 @@ const STATE = {
   brady:    { label: "Bradicardia",    accent: "var(--c-info)",   glyph: "↓" },
 };
 
-// ── Helpers ───────────────────────────────────────────────────
+// Helpers
 const fmtSec = s =>
   `${String(Math.floor(s / 60)).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
 
@@ -45,7 +45,7 @@ const samplesTo = (n, fs = FS) => {
   return `${String(Math.floor(s / 60)).padStart(2,"0")}:${String(s % 60).padStart(2,"0")}`;
 };
 
-// ── Componente principal ──────────────────────────────────────
+// Componente principal
 export default function Monitor() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -136,7 +136,7 @@ export default function Monitor() {
     let sdnn = null;
     let finalRmssd = null;
 
-    // ── MÉTROLOGÍA DE VARIABILIDAD CARDÍACA (HRV) CORREGIDA ──
+    // MÉTROLOGÍA DE VARIABILIDAD CARDÍACA (HRV) CORREGIDA
     if (rrList.length >= 2) {
       // 1. SDNN: Desviación estándar de los intervalos R-R puros
       const meanRR = rrList.reduce((a, b) => a + b, 0) / rrList.length;
