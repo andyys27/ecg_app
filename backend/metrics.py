@@ -8,11 +8,13 @@ class ECGMetricsCalculator:
         self.r_peaks_timestamps = deque(maxlen=history_len)
         self.total_beats = 0
         self.last_bpm = 0.0
+        self.last_peak_time = None
 
     # Registra un nuevo pico y recalcula las metricas
     def register_peak(self, timestamp_ms) -> dict:
         self.total_beats += 1
         self.r_peaks_timestamps.append(timestamp_ms)
+        self.last_peak_time = timestamp_ms
         
         if len(self.r_peaks_timestamps) < 2:
             return {"bpm": 0, "rr_interval": 0, "total_beats": self.total_beats}
@@ -39,6 +41,17 @@ class ECGMetricsCalculator:
             "total_beats": self.total_beats,
         }
     
+    # Control de timeout
+    def check_timeout(self, current_timestamp_ms) -> float:
+        if self.last_peak_time is not None:
+            elapsed_ms = current_timestamp_ms - self.last_peak_time
+            
+            # Si pasan más de 2500 ms sin picos, la FC cae a 0
+            if elapsed_ms > 2500:
+                self.last_bpm = 0.0
+                
+        return round(self.last_bpm, 1)
+
     @staticmethod
     def bpm_to_color(bpm: float) -> str:
         if bpm <= 0:   return "NONE"

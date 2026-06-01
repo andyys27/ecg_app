@@ -67,15 +67,15 @@ class ECGProcessor:
         is_r_peak = self.detector.process_sample(filtered_val)
         
         # 3. Metricas inter-latido
-        bpm = self.metrics.last_bpm
-        rr_interval = 0
-        total_beats = self.metrics.total_beats
-
         if is_r_peak:
             res = self.metrics.register_peak(t_ms)
             bpm = res["bpm"]
             rr_interval = res["rr_interval"]
             total_beats = res["total_beats"]
+        else:
+            bpm = self.metrics.check_timeout(t_ms)
+            rr_interval = 0
+            total_beats = self.metrics.total_beats
 
         color = self.metrics.bpm_to_color(bpm)
 
@@ -88,8 +88,6 @@ class ECGProcessor:
             "rr_interval": rr_interval,
             "total_beats": total_beats,
             "color": color,
-            "min": float(min(self.raw_history)) if self.raw_history else raw_val,
-            "max": float(max(self.raw_history)) if self.raw_history else raw_val
         }
 
     # Mantiene compatibilidad con el endpoint de analitica de CSVs (Modo Offline)

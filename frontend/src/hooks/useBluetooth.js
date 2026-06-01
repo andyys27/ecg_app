@@ -10,9 +10,9 @@ export function useBluetooth() {
     const filtBufRef     = useRef(new Array(BUFFER_SIZE).fill({ t: 0, ecg: 0 }));
     const writeIdxRef    = useRef(0);
     const sampleCountRef = useRef(0);
+    const rPeakTimesRef  = useRef([]);
 
     const bleFragmentRef = useRef("");
-    const rPeakTimesRef  = useRef([]);
     
     const deviceRef = useRef(null);
     const wsRef     = useRef(null);
@@ -20,8 +20,8 @@ export function useBluetooth() {
     const [metrics, setMetrics] = useState({
         bpm:         "--",
         color:       "NONE",
-        min:         0,
-        max:         0,
+        rr_interval: "-",
+        total_beats: 0,
         lastRPeak:   null,
         connected:   false,
         sampleCount: 0,
@@ -41,7 +41,6 @@ export function useBluetooth() {
             
             for (let i = 0; i < len; i++) {
                 const idx = writeIdxRef.current;
-                // Reconstrucción retrógrada del vector de tiempo absoluto
                 const tEst = now - (len - i) * SAMPLE_TIME;
                 
                 rawBufRef.current[idx]  = { t: tEst, ecg: Number(rawArr[i])  || 0 };
@@ -68,6 +67,8 @@ export function useBluetooth() {
             writeIdxRef.current = (idx + 1) % BUFFER_SIZE;
             sampleCountRef.current += 1;
 
+            // REVISAr EL -50 QUE PUEDE ESTABLECER EL LIMITE AAAAAAAAAAAAAAA
+
             // Gestión síncrona del marcador de picos R
             if (packet.is_r_peak === true) {
                 rPeakTimesRef.current = [...rPeakTimesRef.current, currentT].slice(-50);
@@ -82,14 +83,20 @@ export function useBluetooth() {
                     ...prev,
                     bpm:         bpmValue > 0 ? Math.round(bpmValue) : prev.bpm,
                     color:       typeof packet.color === "string" ? packet.color : prev.color,
-                    min:         typeof packet.min === "number" ? packet.min : prev.min,
-                    max:         typeof packet.max === "number" ? packet.max : prev.max,
+                    rr_interval: packet.rr_interval !== undefined ? packet.rr_interval : prev.rr_interval,
+                    total_beats: packet.total_beats !== undefined ? (packet.total_beats - beatsOffsetRef.current) : prev.total_beats,                    lastRPeak:   packet.is_r_peak ? currentT : prev.lastRPeak,
                     lastRPeak:   packet.is_r_peak ? currentT : prev.lastRPeak,
                     sampleCount: sampleCountRef.current,
                 }));
             }
         }
     }, []);
+
+    const resetSessionBeats = useCallback(() => {
+        beatsOffsetRef.current = globalBeatsRef.current;
+        setMetrics(prev => ({ ...prev, total_beats: 0 }));
+    }, []);
+
 
     // Conexión y ciclo de vida del WebSocket
     const connectWS = useCallback((url = "ws://localhost:8000/ws") => {
@@ -114,7 +121,7 @@ export function useBluetooth() {
         };
 
         ws.onclose = () => {
-            setMetrics(prev => ({ ...prev, connected: false }));
+            setMetrics(prev => ({ ...prev, connected: false, bpm: 0, color: "NONE" }));
             console.log("[WS] Canal cerrado.");
         };
 
@@ -128,61 +135,7 @@ export function useBluetooth() {
             wsRef.current.close();
             wsRef.current = null;
         }
-        setMetrics(prev => ({ ...prev, connected: false }));
-    }, []);
-
-    // Conexión Directa mediante Web Bluetooth API
-    const BLE_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const BLE_CHAR    = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-
-    const handleBLENotification = useCallback((event) => {
-        const text = new TextDecoder().decode(event.target.value);
-        bleFragmentRef.current += text;
-        
-        if (!bleFragmentRef.current.endsWith("}")) return;
-
-        try {
-            const packet = JSON.parse(bleFragmentRef.current);
-            bleFragmentRef.current = "";
-            // Adaptamos la inyección cruda del firmware para que pase por el pipeline
-            const sample = { ...packet, filtered: packet.filtered ?? packet.raw ?? 0 };
-            handlePacket(sample);
-        } catch {
-            bleFragmentRef.current = "";
-        }
-    }, [handlePacket]);
-
-    const connectBLE = useCallback(async () => {
-        try {
-            const device = await navigator.bluetooth.requestDevice({
-                filters:          [{ name: "ESP32_Equipo2" }],
-                optionalServices: [BLE_SERVICE],
-            });
-            deviceRef.current = device;
-
-            device.addEventListener("gattserverdisconnected", () => {
-                setMetrics(prev => ({ ...prev, connected: false }));
-            });
-
-            const server  = await device.gatt.connect();
-            const service = await server.getPrimaryService(BLE_SERVICE);
-            const char    = await service.getCharacteristic(BLE_CHAR);
-
-            await char.startNotifications();
-            char.addEventListener("characteristicvaluechanged", handleBLENotification);
-
-            setMetrics(prev => ({ ...prev, connected: true, mode: "ble-direct" }));
-            console.log("[BLE] Enlazado con", device.name);
-        } catch (err) {
-            console.error("[BLE] Error en emparejamiento:", err);
-        }
-    }, [handleBLENotification]);
-
-    const disconnectBLE = useCallback(() => {
-        if (deviceRef.current?.gatt.connected) {
-            deviceRef.current.gatt.disconnect();
-        }
-        setMetrics(prev => ({ ...prev, connected: false }));
+        setMetrics(prev => ({ ...prev, connected: false, bpm: 0, color: "NONE" }));
     }, []);
 
     // Extracción segura de datos ordenados para el canvas del LiveChart
@@ -200,7 +153,6 @@ export function useBluetooth() {
         getRPeaks,
         connectWS,
         disconnectWS,
-        connectBLE,
-        disconnectBLE,
+        resetSessionBeats,
     };
 }
