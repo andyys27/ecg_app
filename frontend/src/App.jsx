@@ -8,7 +8,7 @@ import Register  from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Monitor   from "./pages/Monitor";
 
-// Ruta protegida — redirige a login si no hay sesión
+// Ruta protegida
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (

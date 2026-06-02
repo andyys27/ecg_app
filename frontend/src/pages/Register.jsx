@@ -104,7 +104,7 @@ export default function Register() {
           ))}
         </div>
 
-        {/* Paso 0: Cuenta */}
+        {/* Cuenta */}
         {step === 0 && (
           <>
             <h1 style={s.title}>Crear cuenta</h1>
@@ -128,7 +128,7 @@ export default function Register() {
           </>
         )}
 
-        {/* Paso 1: Perfil médico*/}
+        {/* Perfil médico*/}
         {step === 1 && (
           <>
             <h1 style={s.title}>Perfil médico</h1>
@@ -179,7 +179,7 @@ export default function Register() {
           </>
         )}
 
-        {/* Paso 2: Confirmación*/}
+        {/* Confirmación*/}
         {step === 2 && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <div style={{

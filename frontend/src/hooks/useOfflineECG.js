@@ -12,7 +12,7 @@ export function useOfflineECG(csvPath, active = true) {
     const rPeakTimesRef = useRef([]);
 
     // Estado de reproduccion
-    const samplesRef  = useRef([]);   // [{ t: ms, ecg: float }]
+    const samplesRef  = useRef([]);  
     const playIdxRef  = useRef(0);
     const intervalRef = useRef(null); 
     const fsRef       = useRef(300);
@@ -24,7 +24,6 @@ export function useOfflineECG(csvPath, active = true) {
 
     // Cargar CSV cuando cambia csvPath
     useEffect(() => {
-        // Detener el intervalo anterior inmediatamente
         if (!active) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -168,7 +167,7 @@ export function useOfflineECG(csvPath, active = true) {
                     // Convertir los índices de picos retornados a marcas de tiempo ms
                     if (peaks.length > 0) {
                         const peakTimes = peaks.map(pi => baseT + pi * sampleInterval);
-                        rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTimes].slice(-50);
+                        rPeakTimesRef.current = [...rPeakTimesRef.current, ...peakTimes].slice(-500);
                     }
 
                     setMetrics(prev => ({

@@ -381,7 +381,7 @@ export default function Monitor() {
       `}</style>
 
       <div className="mon-page">
-        {/* ── Nav ──────────────────────────────────────────── */}
+        {/* Nav */}
         <nav className="mon-nav">
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div className="mon-logo-mark">C</div>
@@ -427,10 +427,10 @@ export default function Monitor() {
           </div>
         </nav>
 
-        {/* ── Contenido ────────────────────────────────────── */}
+        {/* Contenido */}
         <div className="mon-content">
 
-          {/* ── Fila superior ─────────────────────────────── */}
+          {/* Fila superior */}
           <div className="mon-top">
 
             {/* Estado Diagnóstico */}
@@ -455,7 +455,7 @@ export default function Monitor() {
                 Sistema Diagnóstico
               </span>
 
-              {/* 2. Bloque Central: Icono + Label */}
+              {/* 2. Bloque Central */}
               <div style={{ 
                 display: "flex", 
                 alignItems: "center", 
@@ -546,7 +546,7 @@ export default function Monitor() {
             </div>
           </div>
 
-          {/* ── Gráfica ECG ───────────────────────────────── */}
+          {/* Gráfica ECG */}
           <div className="mon-card">
             <div className="mon-chart-header">
               <div>
@@ -616,7 +616,7 @@ export default function Monitor() {
             </div>
           </div>
 
-          {/* ── Barra inferior ────────────────────────────── */}
+          {/* Barra inferior */}
           <div className="mon-bottom">
             <div className="mon-info-bar">
               <i className="ti ti-info-circle mon-info-icon" />
@@ -641,7 +641,7 @@ export default function Monitor() {
                 </button>}
           </div>
 
-          {/* ── Selector CSV ──────────────────────────────── */}
+          {/* Selector CSV */}
           {mode === "offline" && !session && (
             <div className="mon-csv-row">
               <span className="mon-csv-label">Registro MIT-BIH</span>

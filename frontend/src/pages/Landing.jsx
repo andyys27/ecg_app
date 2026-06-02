@@ -10,12 +10,6 @@ const FEATURES = [
     desc:  "500 Hz · filtrado digital con biquads",
   },
   {
-    icon: "ti-chart-dots",
-    color: "#7c6af7",
-    title: "Análisis HRV",
-    desc:  "SDNN · RMSSD · pNN50 · Poincaré",
-  },
-  {
     icon: "ti-bell",
     color: "#f7a84f",
     title: "Alertas clínicas",
@@ -33,7 +27,6 @@ export default function Landing() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Si ya hay sesión activa, ir directo al dashboard
   useEffect(() => {
     if (user) navigate("/dashboard");
   }, [user, navigate]);
@@ -46,7 +39,7 @@ export default function Landing() {
           <div style={s.logoIcon}>
             <i className="ti ti-activity" style={{ fontSize: 16, color: "#fff" }} aria-hidden="true" />
           </div>
-          <span style={s.logoText}>CardioSense</span>
+          <span style={s.logoText}>OndaVital</span>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <button style={s.btnGhost} onClick={() => navigate("/login")}>
@@ -58,7 +51,6 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── Hero ── */}
       <section style={s.hero}>
         <div style={s.pill}>
           <i className="ti ti-bluetooth" style={{ fontSize: 12 }} aria-hidden="true" />
@@ -78,7 +70,7 @@ export default function Landing() {
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button style={{ ...s.btnPrimary, padding: "12px 28px", fontSize: 15 }}
             onClick={() => navigate("/register")}>
-            Comenzar gratis
+            Comenzar 
           </button>
           <button style={{ ...s.btnGhost, padding: "12px 28px", fontSize: 15 }}
             onClick={() => navigate("/monitor")}>
@@ -88,7 +80,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Features ── */}
+      {/* Features */}
       <section style={s.features}>
         {FEATURES.map((f) => (
           <div key={f.title} style={s.featureCard}>
@@ -101,9 +93,9 @@ export default function Landing() {
         ))}
       </section>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <footer style={s.footer}>
-        <p>CardioSense · Bioinstrumentación · MIT-BIH Arrhythmia Database · PhysioNet</p>
+        <p>OndaVital · MIT-BIH Arrhythmia Database · PhysioNet</p>
       </footer>
     </div>
   );

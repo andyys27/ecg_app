@@ -43,7 +43,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { nombre } },  // pasa nombre al trigger de la DB
+      options: { data: { nombre } }, 
     });
     if (error) throw error;
 
@@ -74,7 +74,6 @@ export function AuthProvider({ children }) {
   );
 }
 
-// Hook para usar el contexto en cualquier componente
 export function useAuth() {
   return useContext(AuthContext);
 }

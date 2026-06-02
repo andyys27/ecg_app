@@ -15,15 +15,15 @@ const THEMES = {
     glow:       true,
   },
   app: {
-    background: "#0e0e10",                 // Mismo fondo de la página (--c-bg)
-    grid:       "rgba(255, 255, 255, 0.02)", // Microgrilla sutil médica
-    gridBold:   "rgba(255, 255, 255, 0.05)", // Subdivisiones principales
-    raw:        "rgba(124, 109, 250, 0.35)", // Azul/violeta atenuado para el ADC crudo
-    filtered:   "#a594fb",                 // Violeta brillante de instrumentación (--c-accent2)
-    rPeak:      "#f87171",                 // Rojo coral síncrono (--c-danger)
-    label:      "#707088",                 // Texto secundario (--c-muted)
-    timeLabel:  "#3a3a44",                 // Ejes de tiempo discretos (--c-faint)
-    divider:    "#2a2a32",                 // Borde de separación segmentado (--c-border)
+    background: "#0e0e10",                 
+    grid:       "rgba(255, 255, 255, 0.02)",
+    gridBold:   "rgba(255, 255, 255, 0.05)",
+    raw:        "rgba(124, 109, 250, 0.35)",
+    filtered:   "#a594fb",                 
+    rPeak:      "#f87171",                 
+    label:      "#707088",                 
+    timeLabel:  "#3a3a44",                 
+    divider:    "#2a2a32",                 
     glow:       false,
   },
 };
@@ -46,7 +46,7 @@ export default function LiveChart({
     const canvas = canvasRef.current;
     const ctx    = canvas.getContext("2d");
 
-    // DPR y ResizeObserver para alta densidad de píxeles (Retina/4K)
+    // DPR y ResizeObserver para alta densidad de píxeles 
     function resize() {
       const rect    = canvas.getBoundingClientRect();
       canvas.width  = rect.width  * window.devicePixelRatio;
@@ -88,16 +88,7 @@ export default function LiveChart({
         ctx.beginPath();
         ctx.moveTo(x, yOffset);
         ctx.lineTo(x, yOffset + height);
-        ctx.stroke();
-
-        // Marcas de tiempo en la base de cada carril
-        if (isBold && i > 0 && i < totalSteps) {
-          ctx.fillStyle = COLORS.timeLabel;
-          // Se usa tipografía monospace limpia emparejada con el CSS del monitor
-          ctx.font      = "9px 'DM Mono', monospace";
-          ctx.textAlign = "center";
-          ctx.fillText(`${currentSec.toFixed(0)}s`, x, yOffset + height - 8);
-        }
+        ctx.stroke();      
       }
       ctx.textAlign = "left";
     }
@@ -119,7 +110,7 @@ export default function LiveChart({
 
       const W = canvas.getBoundingClientRect().width;
 
-      // Dibujo de la traza de señal continua
+      // Dibujo de la traza de senal continua
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth   = 1.5;
@@ -132,7 +123,7 @@ export default function LiveChart({
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Inyección de Marcadores R-Peak (Clasificación del Algoritmo DSP)
+      // Inyección de Marcadores R-Peak 
       if (peaks.length > 0 && slice[0].t > 0) {
         const tStart = slice[0].t;
         const tEnd   = slice[n - 1].t;
@@ -162,7 +153,6 @@ export default function LiveChart({
       ctx.fillText(label, 12, yOffset + 18);
     }
 
-    // Línea divisoria segmentada en modo multicanal
     function drawDivider(W, y) {
       ctx.strokeStyle = COLORS.divider;
       ctx.lineWidth   = 1;
@@ -171,7 +161,7 @@ export default function LiveChart({
       ctx.setLineDash([]);
     }
 
-    // Render loop síncrono (60fps acoplado a la GPU)
+    // Render loop síncrono
     function draw() {
       const rect = canvas.getBoundingClientRect();
       const W    = rect.width;
@@ -184,10 +174,9 @@ export default function LiveChart({
       const visS      = (VISIBLE_SAMPLES / fs).toFixed(0);
 
       if (dualChannel) {
-        // Modo dual: Señal Cruda (Carril Superior), Procesada/Filtrada (Carril Inferior)
         const laneH = H / 2;
 
-        // 1. Carril RAW (ADC Directo)
+        // 1. Carril RAW 
         drawGrid(W, H, 0, laneH);
         const rawBuf   = getBuffer("raw");
         const rawSlice = rawBuf.slice(-VISIBLE_SAMPLES);
@@ -197,13 +186,12 @@ export default function LiveChart({
           laneH,
           color:   COLORS.raw,
           label:   `CANAL 01 [RAW_DATA] · SWEEP: ${visS}s · SR: ${fs}Hz`,
-          peaks:   [], // La señal cruda no lleva marcadores para contrastar efectividad    
+          peaks:   [], 
         });
 
-        // Separación sutil física de carriles
         drawDivider(W, laneH);
 
-        // 2. Carril FILTRADO (Pipeline DSP)
+        // 2. Carril FILTRADO 
         drawGrid(W, H, laneH, laneH);
         const filtBuf   = getBuffer("filtered");
         const filtSlice = filtBuf.slice(-VISIBLE_SAMPLES);
@@ -212,24 +200,10 @@ export default function LiveChart({
           yOffset: laneH,
           laneH,
           color:   COLORS.filtered,
-          label:   `CANAL 02 [FILTRADO_DSP] · BPF: 0.5–40 Hz · NOTCH: 60 Hz`,
-          peaks:   peakTimes, // Inyecta picos en tiempo real detectados sobre la señal limpia
+          label:   `CANAL 02 [FILTRADO_DSP] · BPF: 0.5–45 Hz · NOTCH: 60 Hz`,
+          peaks:   peakTimes, 
         });
-
-      } else {
-        // Modo monocanal simple full-screen
-        drawGrid(W, H);
-        const buf   = getBuffer(signalType);
-        const slice = buf.slice(-VISIBLE_SAMPLES);
-        drawSignal({
-          slice,
-          yOffset: 0,
-          laneH:   H,
-          color:   signalType === "raw" ? COLORS.raw : COLORS.filtered,
-          label:   `${signalType.toUpperCase()} MONITOR · TIMELINE: ${visS}s · MUESTREO: ${fs} Hz`,
-          peaks:   peakTimes,
-        });
-      }
+      } 
 
       rafRef.current = requestAnimationFrame(draw);
     }

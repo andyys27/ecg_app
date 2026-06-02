@@ -279,7 +279,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* FIXED: Muestra siempre el conteo global absoluto de la DB */}
+            {/* Muestra siempre el conteo global absoluto de la DB */}
             <div className="db-stat-card">
               <span className="db-stat-label">Sesiones Guardadas</span>
               <div>

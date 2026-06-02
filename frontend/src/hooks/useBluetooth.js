@@ -61,7 +61,6 @@ export function useBluetooth() {
 
       setMetrics((prev) => ({
         ...prev,
-        // BPM: mostrar el valor actual del JSON, incluso si es 0
         bpm:
           !isNaN(bpmValue)
             ? bpmValue > 0
@@ -71,7 +70,6 @@ export function useBluetooth() {
         color: typeof packet.color === "string" ? packet.color : prev.color,
         rr_interval:
           packet.rr_interval !== undefined ? packet.rr_interval : prev.rr_interval,
-        // total_beats: aplicar offset para que comience en 0 al iniciar sesión
         total_beats:
           packet.total_beats !== undefined
             ? Math.max(0, packet.total_beats - beatsOffsetRef.current)
@@ -82,7 +80,7 @@ export function useBluetooth() {
     }
   }, []);
 
-  // Resetear offset de beats (se llama desde Monitor al iniciar sesión)
+  // Resetear offset de beats 
   const resetSessionBeats = useCallback(() => {
     beatsOffsetRef.current = globalBeatsRef.current;
     console.log(
@@ -109,7 +107,6 @@ export function useBluetooth() {
           const packet = JSON.parse(event.data);
           handlePacket(packet);
         } catch (e) {
-          // Ignora errores de parseo
         }
       };
 

@@ -36,13 +36,12 @@ export default function Login() {
           <div style={s.logoIcon}>
             <i className="ti ti-activity" style={{ fontSize: 20, color: "#fff" }} aria-hidden="true" />
           </div>
-          <span style={{ fontSize: 16, fontWeight: 500, color: "#e8eaf0" }}>CardioSense</span>
+          <span style={{ fontSize: 16, fontWeight: 500, color: "#e8eaf0" }}>OndaVital</span>
         </div>
 
         <h1 style={s.title}>Bienvenido de nuevo</h1>
         <p style={s.sub}>Inicia sesión para continuar</p>
 
-        {/* Tab selector visual (decorativo, el register es otra ruta) */}
         <div style={s.tabRow}>
           <div style={{ ...s.tab, ...s.tabActive }}>Iniciar sesión</div>
           <div style={s.tab} onClick={() => navigate("/register")}>Registrarse</div>
