@@ -120,7 +120,10 @@ export default function Monitor() {
 
   // Persistencia en Supabase
   const startSession = useCallback(async () => {
-    if (!user || !canStartSession) return;
+    if (!user || !canStartSession) {
+      console.warn("DEBUG: No se pudo iniciar sesión. User:", user, "CanStart:", canStartSession);
+      return;
+    }
     
     if (mode === "offline") {
       initialRPeaksRef.current = getRPeaks().length;
@@ -131,32 +134,61 @@ export default function Monitor() {
       modo: mode,
       registro_mitbih: mode === "offline" ? csvPath : null,
     }).select().single();
-    if (!error) setSession(data);
+
+    if (error) {
+      console.error("ERROR AL CREAR SESIÓN EN SUPABASE:", error.message, error.details);
+    } else {
+      console.log("Sesión creada con éxito ID:", data.id);
+      setSession(data);
+    }
   }, [user, canStartSession, mode, csvPath, getRPeaks]);
 
   const endSession = useCallback(async () => {
-    if (!session) return;
+    if (!session) {
+      console.error("ERROR: Intentaste terminar sesión pero 'session' está vacío. Nada se guardará.");
+      return;
+    }
+    
     clearInterval(timerRef.current);
     const bpm = Number(metrics.bpm);
 
     const estado = { 
-      death:"muerte",
-      idle:"indefinido", 
-      normal:"normal", 
-      elevated:"elevado",
-      tachy:"taquicardia", 
-      brady:"bradicardia" 
+      death: "muerte",
+      idle: "indefinido", 
+      normal: "normal", 
+      elevated: "elevado",
+      tachy: "taquicardia", 
+      brady: "bradicardia" 
     }[stateKey] ?? "indefinido";
-                     
-    await supabase.from("sessions").update({ duracion_seg: elapsed }).eq("id", session.id);
-    await supabase.from("ecg_measurements").insert({
-      session_id: session.id,
-      bpm_promedio: isNaN(bpm) || bpm === 0 ? null : bpm,
-      estado,
-      total_beats: displayBeats,
-    });
+                    
+    // 1. Actualizar Sesión
+    const { error: errorSession } = await supabase
+      .from("sessions")
+      .update({ duracion_seg: elapsed })
+      .eq("id", session.id);
+
+    if (errorSession) {
+      console.error("ERROR AL ACTUALIZAR DURACIÓN DE SESIÓN:", errorSession.message);
+    }
+
+    // 2. Insertar Medición
+    const { error: errorMeasurement } = await supabase
+      .from("ecg_measurements")
+      .insert({
+        session_id: session.id,
+        bpm_promedio: isNaN(bpm) || bpm === 0 ? null : bpm,
+        estado,
+        total_beats: displayBeats, 
+      });
+
+    if (errorMeasurement) {
+      console.error("ERROR AL INSERTAR MEDICIÓN:", errorMeasurement.message, errorMeasurement.details);
+    } else {
+      console.log("Medición guardada con éxito.");
+    }
+
     navigate("/dashboard");
-  }, [session, elapsed, metrics.bpm, stateKey, displayBeats, navigate]);
+  }, [session, elapsed, metrics.bpm, stateKey, navigate]);
 
   return (
     <>
