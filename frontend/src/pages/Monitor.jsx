@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate }    from "react-router-dom";
 import { useAuth }        from "../context/AuthContext";
 import { supabase }       from "../lib/supabase";
@@ -12,28 +12,30 @@ const VISIBLE_SAMPLES = 1500;
 
 const RECORDS = [
   { label: "100 — Ritmo sinusal normal",         path: "/100.csv" },
-  { label: "106 — Contracciones ventriculares", path: "/106.csv" },
-  { label: "119 — Bigeminismo",                 path: "/119.csv" },
-  { label: "208 — Arritmia mixta",              path: "/208.csv" },
+  { label: "106 — Contracciones ventriculares",  path: "/106.csv" },
+  { label: "119 — Bigeminismo",                  path: "/119.csv" },
+  { label: "208 — Arritmia mixta",               path: "/208.csv" },
 ];
 
 // Clasificación 
 function classifyBPM(bpm) {
   const b = Number(bpm);
 
-  if (!bpm || isNaN(b) || b === 0) return "idle";
-  if (b < 50)  return "brady";
+  if (b === 0) return "death";
+  if (!bpm || isNaN(b)) return "idle";
+  if (b < 60)  return "brady";
   if (b > 140) return "tachy";
   if (b > 100) return "elevated";
   return "normal";
 }
 
 const STATE = {
-  idle:     { label: "Sin señal",      accent: "var(--c-idle)",   glyph: "○" },
-  normal:   { label: "Normal",         accent: "var(--c-ok)",     glyph: "♥" },
-  elevated: { label: "Elevado",        accent: "var(--c-warn)",   glyph: "↑" },
-  tachy:    { label: "Taquicardia",    accent: "var(--c-danger)", glyph: "⚡" },
-  brady:    { label: "Bradicardia",    accent: "var(--c-info)",   glyph: "↓" },
+  death:    { label: "Sin pulso",   accent: "var(--c-danger)", icon: "ti-heart-off",       desc: "Paro cardíaco detectado" },
+  idle:     { label: "Sin señal",   accent: "var(--c-idle)",   icon: "ti-database-off",    desc: "Esperando flujo de datos..." },
+  normal:   { label: "Normal",      accent: "var(--c-ok)",     icon: "ti-activity",        desc: "Ritmo sinusal estable" },
+  elevated: { label: "Elevado",     accent: "var(--c-warn)",   icon: "ti-trending-up",     desc: "FC sobre el promedio" },
+  tachy:    { label: "Taquicardia", accent: "var(--c-danger)", icon: "ti-alert-triangle",  desc: "Frecuencia crítica alta" },
+  brady:    { label: "Bradicardia", accent: "var(--c-info)",   icon: "ti-trending-down",   desc: "Frecuencia crítica baja" },
 };
 
 // Helpers
@@ -59,39 +61,32 @@ export default function Monitor() {
 
   const timerRef = useRef(null);
   const startRef = useRef(null);
+  const initialRPeaksRef = useRef(0);
 
   const offlineData = useOfflineECG(csvPath, mode === "offline");
   const btData      = useBluetooth();
   const activeData  = mode === "offline" ? offlineData : btData;
   const { metrics, getBuffer, getRPeaks } = activeData;
 
-  // ── Estados Derivados (Evitan renders infinitos y limpian el pipeline) ──
+  // ── Estados Derivados ──
   const bpmValid = Number(metrics.bpm);
   const lastRR = (!isNaN(bpmValid) && bpmValid > 0) ? Math.round((60 / bpmValid) * 1000) : "--";
+
+  // Total beats
+  const rpeaksCount = getRPeaks().length;
+  const displayBeats = mode === "offline" 
+    ? Math.max(0, rpeaksCount - initialRPeaksRef.current)
+    : metrics.total_beats || 0;
 
   // Actualización del histórico de intervalos R-R
   useEffect(() => {
     if (lastRR !== "--") {
       setRrList(prev => {
         if (prev.length > 0 && prev[prev.length - 1] === lastRR) return prev;
-        return [...prev.slice(-29), lastRR]; // Mantiene una ventana de los últimos 30 latidos
+        return [...prev.slice(-29), lastRR]; 
       });
     }
   }, [lastRR]);
-
-  // Cálculo de RMSSD en tiempo real para visualización
-  let displayRmssd = "--";
-  if (mode !== "offline" && metrics.rmssd != null && metrics.rmssd > 0) {
-    displayRmssd = Math.round(metrics.rmssd);
-  } else if (rrList.length >= 4) {
-    let sumDiffSquares = 0;
-    for (let i = 1; i < rrList.length; i++) {
-      const diff = rrList[i] - rrList[i - 1];
-      sumDiffSquares += diff * diff;
-    }
-    const calculatedRmssd = Math.round(Math.sqrt(sumDiffSquares / (rrList.length - 1)));
-    displayRmssd = calculatedRmssd > 0 ? calculatedRmssd : 18;
-  }
 
   // Timer de sesión clínica
   useEffect(() => {
@@ -107,64 +102,61 @@ export default function Monitor() {
     return () => clearInterval(timerRef.current);
   }, [session]);
 
-  const handleConnect    = () => mode === "bluetooth" ? btData.connectBLE() : btData.connectWS(wsUrl);
-  const handleDisconnect = () => mode === "bluetooth" ? btData.disconnectBLE() : btData.disconnectWS();
-  const isConnected      = metrics.connected;
+  const isConnected      = Boolean(metrics.connected);
   const showConnectBtn   = mode !== "offline";
+
+  const handleConnect    = useCallback(() => {
+    if (!isConnected) {
+      btData.resetSessionBeats();
+    }
+    btData.connectWS(wsUrl);
+  }, [btData, wsUrl, isConnected]);
+  const handleDisconnect = useCallback(() => btData.disconnectWS(), [btData]);
 
   const stateKey = classifyBPM(metrics.bpm);
   const st       = STATE[stateKey];
   
-  // Guardrail para evitar inicializar grabación sin hardware listo
   const canStartSession = mode === "offline" || isConnected;
 
   // Persistencia en Supabase
-  async function startSession() {
+  const startSession = useCallback(async () => {
     if (!user || !canStartSession) return;
+    
+    if (mode === "offline") {
+      initialRPeaksRef.current = getRPeaks().length;
+    }
+    
     const { data, error } = await supabase.from("sessions").insert({
-      user_id: user.id, modo: mode,
+      user_id: user.id, 
+      modo: mode,
       registro_mitbih: mode === "offline" ? csvPath : null,
     }).select().single();
     if (!error) setSession(data);
-  }
+  }, [user, canStartSession, mode, csvPath, getRPeaks]);
 
-  async function endSession() {
+  const endSession = useCallback(async () => {
     if (!session) return;
     clearInterval(timerRef.current);
     const bpm = Number(metrics.bpm);
-    
-    let sdnn = null;
-    let finalRmssd = null;
 
-    // MÉTROLOGÍA DE VARIABILIDAD CARDÍACA (HRV) CORREGIDA
-    if (rrList.length >= 2) {
-      // 1. SDNN: Desviación estándar de los intervalos R-R puros
-      const meanRR = rrList.reduce((a, b) => a + b, 0) / rrList.length;
-      const varianceRR = rrList.reduce((a, b) => a + (b - meanRR) ** 2, 0) / rrList.length;
-      sdnn = Math.round(Math.sqrt(varianceRR));
-
-      // 2. RMSSD: Raíz cuadrada de la media de las diferencias sucesivas al cuadrado
-      let sumDiffSquares = 0;
-      for (let i = 1; i < rrList.length; i++) {
-        const diff = rrList[i] - rrList[i - 1];
-        sumDiffSquares += diff * diff;
-      }
-      finalRmssd = Math.round(Math.sqrt(sumDiffSquares / (rrList.length - 1)));
-    } else if (displayRmssd !== "--") {
-      finalRmssd = Number(displayRmssd);
-    }
-
-    const estado = { idle:"indefinido", normal:"normal", elevated:"elevado",
-                     tachy:"taquicardia", brady:"bradicardia" }[stateKey] ?? "indefinido";
+    const estado = { 
+      death:"muerte",
+      idle:"indefinido", 
+      normal:"normal", 
+      elevated:"elevado",
+      tachy:"taquicardia", 
+      brady:"bradicardia" 
+    }[stateKey] ?? "indefinido";
                      
     await supabase.from("sessions").update({ duracion_seg: elapsed }).eq("id", session.id);
     await supabase.from("ecg_measurements").insert({
       session_id: session.id,
-      bpm_promedio: isNaN(bpm) ? null : bpm,
-      sdnn, rmssd: finalRmssd, estado,
+      bpm_promedio: isNaN(bpm) || bpm === 0 ? null : bpm,
+      estado,
+      total_beats: displayBeats,
     });
     navigate("/dashboard");
-  }
+  }, [session, elapsed, metrics.bpm, stateKey, displayBeats, navigate]);
 
   return (
     <>
@@ -172,21 +164,22 @@ export default function Monitor() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:wght@300;400;500;600&display=swap');
 
         :root {
-          --c-bg:      #0e0e10;
-          --c-surface: #16161a;
-          --c-panel:   #1c1c21;
-          --c-border:  #2a2a32;
-          --c-border2: #323238;
-          --c-text:    #e8e8f0;
-          --c-muted:   #707088;
-          --c-faint:   #3a3a44;
-          --c-accent:  #7c6dfa;
-          --c-accent2: #a594fb;
-          --c-ok:      #34d399;
-          --c-warn:    #fbbf24;
-          --c-danger:  #f87171;
-          --c-info:    #60a5fa;
-          --c-idle:    #6b7280;
+          --c-bg:      #0a1628;
+          --c-surface: #0f1f35;
+          --c-panel:   #132d4a;
+          --c-border:  #1a3a52;
+          --c-border2: #1f4661;
+          --c-text:    #e0f2ff;
+          --c-muted:   #7fa3c0;
+          --c-faint:   #3a4d5c;
+          --c-accent:  #00d4ff;
+          --c-accent2: #00e5ff;
+          --c-ok:      #00d974;
+          --c-warn:    #ffa500;
+          --c-danger:  #ff5a5a;
+          --c-info:    #0099ff;
+          --c-death:   #8b0000;
+          --c-idle:    #5a7a99;
           --font-mono: 'DM Mono', ui-monospace, monospace;
           --font-sans: 'DM Sans', system-ui, sans-serif;
           --r:         12px;
@@ -220,7 +213,7 @@ export default function Monitor() {
           width: 30px; height: 30px; border-radius: 8px;
           background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
           display: flex; align-items: center; justify-content: center;
-          font-family: var(--font-mono); font-size: 13px; color: #fff; font-weight: 500;
+          font-family: var(--font-mono); font-size: 13px; color: var(--c-bg); font-weight: 600;
           box-shadow: 0 0 16px color-mix(in srgb, var(--c-accent) 40%, transparent);
         }
 
@@ -234,7 +227,8 @@ export default function Monitor() {
           cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
         }
         .mon-mode-btn.active {
-          background: var(--c-accent); color: #fff;
+          background: var(--c-accent); color: var(--c-bg);
+          font-weight: 600;
           box-shadow: 0 1px 8px color-mix(in srgb, var(--c-accent) 35%, transparent);
         }
         .mon-mode-btn:not(.active) { background: transparent; color: var(--c-idle); }
@@ -259,11 +253,8 @@ export default function Monitor() {
         .mon-content { max-width: 1020px; margin: 0 auto; padding: 32px 28px; display: flex; flex-direction: column; gap: 20px; }
         .mon-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-lg); padding: 24px; transition: border-color 0.2s; }
 
-        .mon-top { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
-        .mon-state-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 28px 20px; }
-        .mon-state-glyph { font-size: 36px; line-height: 1; transition: color 0.3s; }
-        .mon-state-label { font-family: var(--font-sans); font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
-        .mon-state-desc { font-size: 11px; color: var(--c-idle); font-family: var(--font-sans); line-height: 1.5; }
+        /* Ajustado de 'start' a 'stretch' para que la primera tarjeta iguale el alto de las métricas */
+        .mon-top { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: stretch; }
         
         .mon-rec-badge {
           display: inline-flex; align-items: center; gap: 5px;
@@ -276,7 +267,7 @@ export default function Monitor() {
         @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.2 } }
 
         .mon-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .mon-metric-card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; gap: 6px; transition: border-color 0.2s; }
+        .mon-metric-card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; transition: border-color 0.2s; }
         .mon-metric-card:hover { border-color: var(--c-border2); }
 
         .mon-metric-label { font-family: var(--font-sans); font-size: 10px; font-weight: 500; color: var(--c-idle); text-transform: uppercase; letter-spacing: 0.08em; }
@@ -306,10 +297,10 @@ export default function Monitor() {
         .mon-bottom { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
         .mon-btn-start {
           background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
-          color: #fff; border: none; border-radius: var(--r);
+          color: var(--c-bg); border: none; border-radius: var(--r);
           padding: 13px 26px; font-family: var(--font-sans); font-size: 13px;
           font-weight: 600; cursor: pointer; white-space: nowrap;
-          display: flex; align-items: center; gap: 7px;
+          display: inline-flex; align-items: center; gap: 7px;
           box-shadow: 0 4px 20px color-mix(in srgb, var(--c-accent) 30%, transparent);
           transition: opacity 0.15s, transform 0.1s;
         }
@@ -329,12 +320,12 @@ export default function Monitor() {
           border-radius: var(--r); padding: 13px 26px;
           font-family: var(--font-sans); font-size: 13px; font-weight: 600;
           cursor: pointer; white-space: nowrap;
-          display: flex; align-items: center; gap: 7px;
+          display: inline-flex; align-items: center; gap: 7px;
           transition: background 0.15s;
         }
         .mon-btn-stop:hover { background: color-mix(in srgb, var(--c-danger) 18%, transparent); }
 
-        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; }
+        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; width: 100%; }
         .mon-info-icon { font-size: 16px; color: var(--c-accent2); flex-shrink: 0; }
         .mon-info-text { font-family: var(--font-sans); font-size: 11px; color: var(--c-idle); line-height: 1.5; }
 
@@ -372,7 +363,6 @@ export default function Monitor() {
             <div className="mon-mode-bar">
               {[
                 { id:"offline",   label:"CSV" },
-                { id:"bluetooth", label:"BLE" },
                 { id:"websocket", label:"WebSocket" },
               ].map(({ id, label }) => (
                 <button key={id} disabled={!!session}
@@ -392,9 +382,9 @@ export default function Monitor() {
             {showConnectBtn && !session && (
               <button className="mon-btn mon-btn-connect"
                 onClick={isConnected ? handleDisconnect : handleConnect}>
-                <i className={`ti ${isConnected ? "ti-bluetooth-off" : mode === "websocket" ? "ti-wifi" : "ti-bluetooth"}`}
+                <i className={`ti ${isConnected ? "ti-wifi-off" : "ti-wifi"}`}
                   style={{ fontSize:13 }} />
-                {isConnected ? "Desconectar" : mode === "websocket" ? "Conectar" : "Vincular ESP32"}
+                {isConnected ? "Desconectar" : "Conectar"}
               </button>
             )}
 
@@ -412,27 +402,70 @@ export default function Monitor() {
           <div className="mon-top">
 
             {/* Estado Diagnóstico */}
-            <div className="mon-card mon-state-card"
-              style={{ borderColor: `color-mix(in srgb, ${st.accent} 30%, var(--c-border))` }}>
-              <div className="mon-state-glyph" style={{ color: st.accent }}>
-                {st.glyph}
-              </div>
-              <div>
-                <div className="mon-state-label" style={{ color: st.accent }}>{st.label}</div>
-                <div className="mon-state-desc" style={{ marginTop:4 }}>
-                  {stateKey === "idle" ? "Esperando datos..." :
-                   stateKey === "normal" ? "Ritmo sinusal estable" :
-                   stateKey === "elevated" ? "FC por encima del umbral" :
-                   stateKey === "tachy" ? "Frecuencia muy elevada" :
-                   "Frecuencia muy baja"}
+            <div className="mon-card"
+              style={{ 
+                borderColor: `color-mix(in srgb, ${st.accent} 25%, var(--c-border))`,
+                boxShadow: `0 0 15px color-mix(in srgb, ${st.accent} 5%, transparent)`,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                height: "100%"
+              }}>
+              
+              {/* 1. Título Superior */}
+              <span style={{ 
+                fontFamily: "var(--font-mono)", 
+                fontSize: "10px", 
+                color: "var(--c-idle)", 
+                letterSpacing: "0.06em",
+                textTransform: "uppercase"
+              }}>
+                Sistema Diagnóstico
+              </span>
+
+              {/* 2. Bloque Central: Icono + Label */}
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: "12px", 
+                margin: "12px 0" 
+              }}>
+                {/* Microindicador LED */}
+                <div style={{ 
+                  color: st.accent,
+                  background: `color-mix(in srgb, ${st.accent} 12%, transparent)`,
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `1px solid color-mix(in srgb, ${st.accent} 30%, transparent)`
+                }}>
+                  <i className={`ti ${st.icon}`} style={{ fontSize: "22px" }} />
                 </div>
+
+                {/* Texto de Estado Principal */}
+                <span style={{ 
+                  color: st.accent, 
+                  fontSize: "24px", 
+                  fontWeight: "600",
+                  letterSpacing: "-0.02em"
+                }}>
+                  {st.label}
+                </span>
               </div>
-              {session && (
-                <div className="mon-rec-badge">
-                  <span className="mon-rec-dot" />
-                  REC · {fmtSec(elapsed)}
-                </div>
-              )}
+
+              {/* 3. Descripción Inferior */}
+              <span style={{ 
+                fontSize: "13px", 
+                color: "var(--c-muted)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}>
+                {st.desc}
+              </span>
             </div>
 
             {/* Panel de Métricas */}
@@ -469,12 +502,12 @@ export default function Monitor() {
                 <div className="mon-metric-label">Total de Latidos</div>
                 <div>
                   <span className="mon-metric-value" style={{ color: "var(--c-accent2)" }}>
-                    {typeof getRPeaks === "function" ? getRPeaks().length : "0"}
+                    {displayBeats}
                   </span>
                   <span className="mon-metric-unit">qrs</span>
                 </div>
                 <div className="mon-metric-sub">
-                  {metrics.bpm !== "--" ? "detección activa de picos" : "esperando complejos..."}
+                  {metrics.bpm !== "--" && bpmValid > 0 ? "detección activa de picos" : "esperando complejos..."}
                 </div>
               </div>
 
@@ -561,8 +594,8 @@ export default function Monitor() {
                   : mode === "offline"
                   ? "Modo de validación con registros MIT-BIH. Inicia una sesión para guardar las métricas."
                   : isConnected
-                  ? "ESP32 Vinculado con éxito. Presiona 'Iniciar Sesión' para comenzar a almacenar el historial."
-                  : "Por favor, establece conexión con el nodo ESP32 mediante BLE o WebSocket antes de iniciar sesión."}
+                  ? "WebSocket conectado. Presiona 'Iniciar Sesión' para comenzar a almacenar el historial."
+                  : "Por favor, establece conexión con el WebSocket antes de iniciar sesión."}
               </p>
             </div>
             {!session
@@ -592,8 +625,6 @@ export default function Monitor() {
           <div className="mon-footer">
             {mode === "offline"
               ? "physionet.org · MIT-BIH Arrhythmia Database · datos de dominio público"
-              : mode === "bluetooth"
-              ? "Web Bluetooth API · Chrome / Edge · requiere gesto del usuario"
               : `WebSocket · ${wsUrl}`}
           </div>
         </div>

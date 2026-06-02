@@ -46,8 +46,8 @@ class ECGMetricsCalculator:
         if self.last_peak_time is not None:
             elapsed_ms = current_timestamp_ms - self.last_peak_time
             
-            # Si pasan más de 2500 ms sin picos, la FC cae a 0
-            if elapsed_ms > 2500:
+            # Si pasan más de 5000 ms sin picos, la FC cae a 0
+            if elapsed_ms > 5000:
                 self.last_bpm = 0.0
                 
         return round(self.last_bpm, 1)
