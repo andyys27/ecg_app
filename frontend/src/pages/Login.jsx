@@ -91,11 +91,7 @@ export default function Login() {
                 onChange={handleChange}
                 required
               />
-              <div style={{ textAlign: "right", marginTop: 8 }}>
-                <span className="log-link" style={{ fontSize: 12, color: "#2471A3", cursor: "pointer", fontWeight: 500 }}>
-                  ¿Olvidaste tu contraseña?
-                </span>
-              </div>
+              
             </div>
 
             {error && (
