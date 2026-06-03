@@ -30,12 +30,12 @@ function classifyBPM(bpm) {
 }
 
 const STATE = {
-  death:    { label: "Sin pulso",   accent: "var(--c-danger)", icon: "ti-heart-off",       desc: "Paro cardíaco detectado" },
-  idle:     { label: "Sin señal",   accent: "var(--c-idle)",   icon: "ti-database-off",    desc: "Esperando flujo de datos..." },
-  normal:   { label: "Normal",      accent: "var(--c-ok)",     icon: "ti-activity",        desc: "Ritmo sinusal estable" },
-  elevated: { label: "Elevado",     accent: "var(--c-warn)",   icon: "ti-trending-up",     desc: "FC sobre el promedio" },
-  tachy:    { label: "Taquicardia", accent: "var(--c-danger)", icon: "ti-alert-triangle",  desc: "Frecuencia crítica alta" },
-  brady:    { label: "Bradicardia", accent: "var(--c-info)",   icon: "ti-trending-down",   desc: "Frecuencia crítica baja" },
+  death:    { label: "Sin pulso",   accent: "var(--c-danger)", icon: "ti-alert-circle",     desc: "Paro cardíaco detectado" },
+  idle:     { label: "Sin señal",   accent: "var(--c-idle)",   icon: "ti-wifi-off",         desc: "Esperando flujo de datos..." },
+  normal:   { label: "Normal",      accent: "var(--c-ok)",     icon: "ti-activity",         desc: "Ritmo sinusal estable" },
+  elevated: { label: "Elevado",     accent: "var(--c-warn)",   icon: "ti-trending-up",      desc: "FC sobre el promedio" },
+  tachy:    { label: "Taquicardia", accent: "var(--c-danger)", icon: "ti-alert-octagon",    desc: "Frecuencia crítica alta" },
+  brady:    { label: "Bradicardia", accent: "var(--c-info)",   icon: "ti-trending-down",    desc: "Frecuencia crítica baja" },
 };
 
 // Helpers
@@ -52,16 +52,15 @@ export default function Monitor() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [mode,    setMode]    = useState("offline");
-  const [csvPath, setCsvPath] = useState("/100.csv");
-  const [session, setSession] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [rrList,  setRrList]  = useState([]);     
-  const [wsUrl,   setWsUrl]   = useState(`ws://${window.location.hostname}:8000/ws`);
+  const [mode,         setMode]         = useState("offline");
+  const [csvPath,      setCsvPath]      = useState("/100.csv");
+  const [session,      setSession]      = useState(null);
+  const [elapsed,      setElapsed]      = useState(0);
+  const [initialRPeaks, setInitialRPeaks] = useState(0);
+  const [wsUrl,        setWsUrl]        = useState(`ws://${window.location.hostname}:8000/ws`);
 
   const timerRef = useRef(null);
   const startRef = useRef(null);
-  const initialRPeaksRef = useRef(0);
 
   const offlineData = useOfflineECG(csvPath, mode === "offline");
   const btData      = useBluetooth();
@@ -75,18 +74,8 @@ export default function Monitor() {
   // Total beats
   const rpeaksCount = getRPeaks().length;
   const displayBeats = mode === "offline" 
-    ? Math.max(0, rpeaksCount - initialRPeaksRef.current)
+    ? Math.max(0, rpeaksCount - initialRPeaks)
     : metrics.total_beats || 0;
-
-  // Actualización del histórico de intervalos R-R
-  useEffect(() => {
-    if (lastRR !== "--") {
-      setRrList(prev => {
-        if (prev.length > 0 && prev[prev.length - 1] === lastRR) return prev;
-        return [...prev.slice(-29), lastRR]; 
-      });
-    }
-  }, [lastRR]);
 
   // Timer de sesión clínica
   useEffect(() => {
@@ -97,7 +86,8 @@ export default function Monitor() {
       );
     } else {
       clearInterval(timerRef.current);
-      setElapsed(0); setRrList([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setElapsed(0);
     }
     return () => clearInterval(timerRef.current);
   }, [session]);
@@ -105,7 +95,7 @@ export default function Monitor() {
   const isConnected      = Boolean(metrics.connected);
   const showConnectBtn   = mode !== "offline";
 
-  const handleConnect    = useCallback(() => {
+  const handleConnect = useCallback(() => {
     if (!isConnected) {
       btData.resetSessionBeats();
     }
@@ -126,7 +116,7 @@ export default function Monitor() {
     }
     
     if (mode === "offline") {
-      initialRPeaksRef.current = getRPeaks().length;
+      setInitialRPeaks(getRPeaks().length);
     }
     
     const { data, error } = await supabase.from("sessions").insert({
@@ -188,7 +178,7 @@ export default function Monitor() {
     }
 
     navigate("/dashboard");
-  }, [session, elapsed, metrics.bpm, stateKey, navigate]);
+  }, [session, elapsed, metrics.bpm, stateKey, displayBeats, navigate]);
 
   return (
     <>
@@ -196,26 +186,27 @@ export default function Monitor() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:wght@300;400;500;600&display=swap');
 
         :root {
-          --c-bg:      #0a1628;
-          --c-surface: #0f1f35;
-          --c-panel:   #132d4a;
-          --c-border:  #1a3a52;
-          --c-border2: #1f4661;
-          --c-text:    #e0f2ff;
-          --c-muted:   #7fa3c0;
-          --c-faint:   #3a4d5c;
-          --c-accent:  #00d4ff;
-          --c-accent2: #00e5ff;
-          --c-ok:      #00d974;
-          --c-warn:    #ffa500;
-          --c-danger:  #ff5a5a;
-          --c-info:    #0099ff;
-          --c-death:   #8b0000;
-          --c-idle:    #5a7a99;
+          /* Paleta Clara - Azul Celeste Amigable (Belize Hole mejorado) */
+          --c-bg:      #F0F6FB;
+          --c-surface: #FFFFFF;
+          --c-panel:   #EBF3FA;
+          --c-border:  #C5DDF1;
+          --c-border2: #9ECCE8;
+          --c-text:    #0F3D5C;
+          --c-muted:   #4A7FA7;
+          --c-faint:   #7FA8C9;
+          --c-accent:  #2471A3;
+          --c-accent2: #1F618D;
+          --c-ok:      #229B46;
+          --c-warn:    #E67E22;
+          --c-danger:  #E74C3C;
+          --c-info:    #2E86C1;
+          --c-death:   #C0392B;
+          --c-idle:    #7F8C8D;
           --font-mono: 'DM Mono', ui-monospace, monospace;
           --font-sans: 'DM Sans', system-ui, sans-serif;
-          --r:         12px;
-          --r-lg:      18px;
+          --r:         10px;
+          --r-lg:      14px;
         }
 
         .mon-page * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -224,7 +215,7 @@ export default function Monitor() {
         .mon-page::before {
           content: '';
           position: fixed; inset: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
           background-size: 180px;
           pointer-events: none;
           z-index: 0;
@@ -235,86 +226,154 @@ export default function Monitor() {
         .mon-nav {
           display: flex; align-items: center; justify-content: space-between;
           padding: 0 32px; height: 56px;
-          background: color-mix(in srgb, var(--c-surface) 90%, transparent);
+          background: color-mix(in srgb, var(--c-surface) 85%, transparent);
           border-bottom: 1px solid var(--c-border);
-          backdrop-filter: blur(12px);
+          backdrop-filter: blur(8px);
           position: sticky; top: 0; z-index: 20;
+          box-shadow: 0 2px 8px color-mix(in srgb, var(--c-accent) 8%, transparent);
         }
 
         .mon-logo-mark {
-          width: 30px; height: 30px; border-radius: 8px;
-          background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+          width: 36px; height: 36px; border-radius: 8px;
+          background: linear-gradient(135deg, var(--c-accent), var(--c-info));
           display: flex; align-items: center; justify-content: center;
-          font-family: var(--font-mono); font-size: 13px; color: var(--c-bg); font-weight: 600;
-          box-shadow: 0 0 16px color-mix(in srgb, var(--c-accent) 40%, transparent);
+          box-shadow: 0 4px 12px color-mix(in srgb, var(--c-accent) 35%, transparent);
         }
 
-        .mon-logo-text { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--c-text); letter-spacing: -0.02em; }
-        .mon-logo-sub { font-size: 11px; color: var(--c-idle); font-family: var(--font-mono); letter-spacing: 0.04em; }
+        .mon-logo-text { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--c-text); letter-spacing: -0.02em; }
+        .mon-logo-sub { font-size: 11px; color: var(--c-muted); font-family: var(--font-mono); letter-spacing: 0.04em; }
 
-        .mon-mode-bar { display: flex; background: var(--c-panel); border: 1px solid var(--c-border); border-radius: 10px; padding: 3px; gap: 2px; }
+        .mon-mode-bar { display: flex; background: var(--c-surface); border: 1px solid var(--c-border2); border-radius: 8px; padding: 4px; gap: 3px; }
         .mon-mode-btn {
-          padding: 5px 14px; border-radius: 7px; border: none;
-          font-family: var(--font-sans); font-size: 11px; font-weight: 500;
-          cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
+          padding: 6px 15px; border-radius: 6px; border: none;
+          font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+          cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
         }
         .mon-mode-btn.active {
-          background: var(--c-accent); color: var(--c-bg);
+          background: linear-gradient(135deg, var(--c-accent), var(--c-info));
+          color: white;
           font-weight: 600;
-          box-shadow: 0 1px 8px color-mix(in srgb, var(--c-accent) 35%, transparent);
+          box-shadow: 0 3px 12px color-mix(in srgb, var(--c-accent) 50%, transparent);
         }
-        .mon-mode-btn:not(.active) { background: transparent; color: var(--c-idle); }
-        .mon-mode-btn:not(.active):hover { color: var(--c-text); }
-        .mon-mode-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .mon-mode-btn:not(.active) { background: transparent; color: var(--c-text); opacity: 0.7; }
+        .mon-mode-btn:not(.active):hover { color: var(--c-accent); opacity: 1; }
+        .mon-mode-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .mon-btn {
           display: inline-flex; align-items: center; gap: 6px;
-          border-radius: 9px; border: none; cursor: pointer;
+          border-radius: 8px; border: none; cursor: pointer;
           font-family: var(--font-sans); font-size: 12px; font-weight: 500;
-          padding: 7px 14px; transition: all 0.15s;
+          padding: 8px 16px; transition: all 0.2s;
         }
-        .mon-btn-ghost { background: var(--c-panel); border: 1px solid var(--c-border2); color: var(--c-idle); }
-        .mon-btn-ghost:hover { color: var(--c-text); border-color: var(--c-faint); }
+        .mon-btn-ghost { background: var(--c-panel); border: 1px solid var(--c-border2); color: var(--c-muted); }
+        .mon-btn-ghost:hover { color: var(--c-accent); border-color: var(--c-accent); }
         .mon-btn-connect {
-          background: color-mix(in srgb, var(--c-accent) 12%, transparent);
-          border: 1px solid color-mix(in srgb, var(--c-accent) 30%, transparent);
-          color: var(--c-accent2);
+          background: color-mix(in srgb, var(--c-accent) 15%, transparent);
+          border: 1px solid var(--c-border2);
+          color: var(--c-accent);
         }
-        .mon-btn-connect:hover { background: color-mix(in srgb, var(--c-accent) 20%, transparent); }
+        .mon-btn-connect:hover { background: color-mix(in srgb, var(--c-accent) 25%, transparent); border-color: var(--c-accent); }
 
-        .mon-content { max-width: 1020px; margin: 0 auto; padding: 32px 28px; display: flex; flex-direction: column; gap: 20px; }
-        .mon-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-lg); padding: 24px; transition: border-color 0.2s; }
+        /* NUEVO CONFIGURACIÓN DE ESPACIO DE TRABAJO (GRID DE 2 COLUMNAS) */
+        .mon-workspace-layout { 
+          max-width: 1440px; 
+          margin: 0 auto; 
+          padding: 32px 28px; 
+          display: grid; 
+          grid-template-columns: 1fr 340px; 
+          gap: 20px; 
+          align-items: start;
+        }
 
-        /* Ajustado de 'start' a 'stretch' para que la primera tarjeta iguale el alto de las métricas */
+        /* Columna principal izquierda */
+        .mon-main-column {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        /* Columna lateral derecha para la imagen del pulso */
+        .mon-side-column {
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          height: 100%;
+          min-height: 520px; /* Consistencia visual con el alto de las gráficas */
+          background: var(--c-surface);
+        }
+
+        .mon-pulse-zone {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          padding: 20px;
+        }
+
+        /* Simulación de animación de latido para probar el feedback visual */
+        .mock-heart.beating {
+          animation: pulse-animation 0.5s infinite alternate ease-in-out;
+        }
+        @keyframes pulse-animation {
+          0% { transform: scale(1); opacity: 0.85; }
+          100% { transform: scale(1.2); opacity: 1; filter: drop-shadow(0 0 12px var(--c-danger)); }
+        }
+
+        .mon-side-footer {
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--c-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          text-align: center;
+          border-top: 1px solid var(--c-border);
+          padding-top: 16px;
+          margin-top: auto;
+        }
+
+        @media (max-width: 1100px) {
+          .mon-workspace-layout {
+            grid-template-columns: 1fr; /* Se apila en una sola columna en pantallas medianas */
+          }
+          .mon-side-column {
+            min-height: 300px;
+          }
+        }
+
+        .mon-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-lg); padding: 24px; transition: all 0.2s; box-shadow: 0 1px 4px color-mix(in srgb, var(--c-accent) 5%, transparent); }
+        .mon-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 8px color-mix(in srgb, var(--c-accent) 10%, transparent); }
+
         .mon-top { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: stretch; }
         
         .mon-rec-badge {
           display: inline-flex; align-items: center; gap: 5px;
-          background: color-mix(in srgb, var(--c-danger) 10%, transparent);
-          border: 1px solid color-mix(in srgb, var(--c-danger) 25%, transparent);
-          border-radius: 20px; padding: 4px 12px;
+          background: color-mix(in srgb, var(--c-danger) 15%, transparent);
+          border: 1px solid var(--c-danger);
+          border-radius: 20px; padding: 5px 12px;
           font-family: var(--font-mono); font-size: 11px; color: var(--c-danger);
         }
-        .mon-rec-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--c-danger); animation: blink 1s ease-in-out infinite; }
-        @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.2 } }
+        .mon-rec-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-danger); animation: blink 1s ease-in-out infinite; }
+        @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
 
         .mon-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
-        .mon-metric-card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; transition: border-color 0.2s; }
-        .mon-metric-card:hover { border-color: var(--c-border2); }
+        .mon-metric-card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; transition: all 0.2s; }
+        .mon-metric-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 6px color-mix(in srgb, var(--c-accent) 8%, transparent); }
 
-        .mon-metric-label { font-family: var(--font-sans); font-size: 10px; font-weight: 500; color: var(--c-idle); text-transform: uppercase; letter-spacing: 0.08em; }
-        .mon-metric-value { font-family: var(--font-mono); font-size: 28px; font-weight: 400; line-height: 1; letter-spacing: -0.02em; color: var(--c-text); }
-        .mon-metric-unit { font-family: var(--font-mono); font-size: 12px; font-weight: 300; color: var(--c-idle); margin-left: 4px; }
-        .mon-metric-sub { font-family: var(--font-mono); font-size: 10px; color: var(--c-muted); margin-top: 2px; }
+        .mon-metric-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--c-accent); text-transform: uppercase; letter-spacing: 0.08em; }
+        .mon-metric-value { font-family: var(--font-mono); font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: var(--c-accent2); }
+        .mon-metric-unit { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--c-accent); margin-left: 6px; }
+        .mon-metric-sub { font-family: var(--font-sans); font-size: 11px; color: var(--c-muted); margin-top: 2px; font-weight: 500; }
 
         .mon-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .mon-chart-title { font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--c-text); }
-        .mon-chart-sub { font-family: var(--font-mono); font-size: 10px; color: var(--c-idle); margin-top: 2px; }
-        .mon-legend { display: flex; align-items: center; gap: 14px; }
-        .mon-legend-item { display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10px; color: var(--c-idle); }
+        .mon-chart-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--c-text); }
+        .mon-chart-sub { font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); margin-top: 4px; }
+        .mon-legend { display: flex; align-items: center; gap: 16px; }
+        .mon-legend-item { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); }
         .mon-legend-dot { width: 8px; height: 2px; border-radius: 1px; }
 
-        .mon-signal-dot { width: 7px; height: 7px; border-radius: 50%; transition: background 0.3s, box-shadow 0.3s; }
+        .mon-signal-dot { width: 8px; height: 8px; border-radius: 50%; transition: background 0.3s, box-shadow 0.3s; }
         .mon-signal-dot.live {
           background: var(--c-ok);
           box-shadow: 0 0 8px color-mix(in srgb, var(--c-ok) 60%, transparent);
@@ -328,70 +387,74 @@ export default function Monitor() {
 
         .mon-bottom { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
         .mon-btn-start {
-          background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
-          color: var(--c-bg); border: none; border-radius: var(--r);
-          padding: 13px 26px; font-family: var(--font-sans); font-size: 13px;
-          font-weight: 600; cursor: pointer; white-space: nowrap;
-          display: inline-flex; align-items: center; gap: 7px;
-          box-shadow: 0 4px 20px color-mix(in srgb, var(--c-accent) 30%, transparent);
-          transition: opacity 0.15s, transform 0.1s;
+          background: linear-gradient(135deg, var(--c-accent), var(--c-info));
+          color: white; border: none; border-radius: var(--r);
+          padding: 12px 28px; font-family: var(--font-sans); font-size: 13px;
+          font-weight: 700; cursor: pointer; white-space: nowrap;
+          display: inline-flex; align-items: center; gap: 8px;
+          box-shadow: 0 4px 16px color-mix(in srgb, var(--c-accent) 45%, transparent);
+          transition: all 0.2s;
         }
-        .mon-btn-start:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+        .mon-btn-start:hover:not(:disabled) { opacity: 0.95; transform: translateY(-2px); box-shadow: 0 6px 22px color-mix(in srgb, var(--c-accent) 55%, transparent); }
         .mon-btn-start:disabled {
           background: var(--c-panel);
           color: var(--c-muted);
           border: 1px solid var(--c-border);
           box-shadow: none;
           cursor: not-allowed;
-          opacity: 0.6;
+          opacity: 0.5;
         }
         .mon-btn-stop {
-          background: color-mix(in srgb, var(--c-danger) 12%, transparent);
+          background: color-mix(in srgb, var(--c-danger) 20%, transparent);
           color: var(--c-danger);
-          border: 1px solid color-mix(in srgb, var(--c-danger) 25%, transparent);
-          border-radius: var(--r); padding: 13px 26px;
-          font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+          border: 1.5px solid var(--c-danger);
+          border-radius: var(--r); padding: 12px 28px;
+          font-family: var(--font-sans); font-size: 13px; font-weight: 700;
           cursor: pointer; white-space: nowrap;
-          display: inline-flex; align-items: center; gap: 7px;
-          transition: background 0.15s;
+          display: inline-flex; align-items: center; gap: 8px;
+          transition: all 0.2s;
         }
-        .mon-btn-stop:hover { background: color-mix(in srgb, var(--c-danger) 18%, transparent); }
+        .mon-btn-stop:hover { background: color-mix(in srgb, var(--c-danger) 30%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--c-danger) 30%, transparent); }
 
-        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; width: 100%; }
-        .mon-info-icon { font-size: 16px; color: var(--c-accent2); flex-shrink: 0; }
-        .mon-info-text { font-family: var(--font-sans); font-size: 11px; color: var(--c-idle); line-height: 1.5; }
+        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1.5px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; width: 100%; box-shadow: 0 1px 4px color-mix(in srgb, var(--c-accent) 8%, transparent); }
+        .mon-info-icon { font-size: 18px; color: var(--c-accent); flex-shrink: 0; }
+        .mon-info-text { font-family: var(--font-sans); font-size: 12px; color: var(--c-text); line-height: 1.6; font-weight: 500; }
 
         .mon-csv-row { display: flex; align-items: center; gap: 12px; }
-        .mon-csv-label { font-family: var(--font-mono); font-size: 11px; color: var(--c-idle); white-space: nowrap; }
-        .mon-select { flex: 1; background: var(--c-panel); border: 1px solid var(--c-border2); border-radius: 9px; padding: 8px 12px; color: var(--c-text); font-family: var(--font-sans); font-size: 12px; outline: none; transition: border-color 0.15s; cursor: pointer; }
-        .mon-select:focus { border-color: var(--c-accent); }
+        .mon-csv-label { font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); white-space: nowrap; }
+        .mon-select { flex: 1; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 9px 12px; color: var(--c-text); font-family: var(--font-sans); font-size: 12px; outline: none; transition: all 0.2s; cursor: pointer; }
+        .mon-select:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 15%, transparent); }
 
-        .mon-footer { font-family: var(--font-mono); font-size: 10px; color: var(--c-faint); text-align: center; padding-bottom: 8px; letter-spacing: 0.04em; }
-        .mon-ws-input { background: var(--c-panel); border: 1px solid var(--c-border2); border-radius: 8px; padding: 6px 11px; color: var(--c-text); font-family: var(--font-mono); font-size: 11px; outline: none; width: 210px; }
-        .mon-ws-input:focus { border-color: var(--c-accent); }
+        .mon-footer { font-family: var(--font-mono); font-size: 10px; color: var(--c-muted); text-align: center; padding: 24px 0 12px; letter-spacing: 0.04em; }
+        .mon-ws-input { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 7px 12px; color: var(--c-text); font-family: var(--font-mono); font-size: 11px; outline: none; width: 210px; transition: all 0.2s; }
+        .mon-ws-input:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 15%, transparent); }
 
-        .mon-indicator-panel { display: flex; align-items: center; gap: 8px; }
+        .mon-indicator-panel { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .mon-indicator-badge {
-          background: var(--c-panel); border: 1px solid var(--c-border2);
-          border-radius: 6px; padding: 4px 10px; display: flex; align-items: center; gap: 6px;
+          background: var(--c-panel); border: 1px solid var(--c-border);
+          border-radius: 6px; padding: 5px 12px; display: flex; align-items: center; gap: 6px;
         }
-        .mon-badge-label { font-family: var(--font-sans); font-size: 10px; font-weight: 500; color: var(--c-idle); text-transform: uppercase; letter-spacing: 0.04em; }
-        .mon-badge-value { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--c-text); }
-        .mon-badge-value.accent { color: var(--c-accent2); }
+        .mon-badge-label { font-family: var(--font-sans); font-size: 10px; font-weight: 600; color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .mon-badge-value { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--c-text); }
+        .mon-badge-value.accent { color: var(--c-accent); }
       `}</style>
 
       <div className="mon-page">
         {/* Nav */}
         <nav className="mon-nav">
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div className="mon-logo-mark">C</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
-              <span className="mon-logo-text">CardioSense</span>
-              <span className="mon-logo-sub">Monitor · v2</span>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div className="mon-logo-mark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18, color: "white" }}>
+                <path d="M3 12h3l2-6 2 13 2-10 2 3h7" />
+              </svg>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+              <span className="mon-logo-text">OndaVital</span>
+              <span className="mon-logo-sub">Monitor</span>
             </div>
           </div>
 
-          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:12, alignItems:"center" }}>
             <div className="mon-mode-bar">
               {[
                 { id:"offline",   label:"CSV" },
@@ -415,250 +478,228 @@ export default function Monitor() {
               <button className="mon-btn mon-btn-connect"
                 onClick={isConnected ? handleDisconnect : handleConnect}>
                 <i className={`ti ${isConnected ? "ti-wifi-off" : "ti-wifi"}`}
-                  style={{ fontSize:13 }} />
+                  style={{ fontSize:14 }} />
                 {isConnected ? "Desconectar" : "Conectar"}
               </button>
             )}
 
             <button className="mon-btn mon-btn-ghost" onClick={() => navigate("/dashboard")}>
-              <i className="ti ti-arrow-left" style={{ fontSize:13 }} />
-              Dashboard
+              <i className="ti ti-arrow-left" style={{ fontSize:14 }} />
+              Panel
             </button>
           </div>
         </nav>
 
-        {/* Contenido */}
-        <div className="mon-content">
-
-          {/* Fila superior */}
-          <div className="mon-top">
-
-            {/* Estado Diagnóstico */}
-            <div className="mon-card"
-              style={{ 
-                borderColor: `color-mix(in srgb, ${st.accent} 25%, var(--c-border))`,
-                boxShadow: `0 0 15px color-mix(in srgb, ${st.accent} 5%, transparent)`,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                height: "100%"
-              }}>
-              
-              {/* 1. Título Superior */}
-              <span style={{ 
-                fontFamily: "var(--font-mono)", 
-                fontSize: "10px", 
-                color: "var(--c-idle)", 
-                letterSpacing: "0.06em",
-                textTransform: "uppercase"
-              }}>
-                Sistema Diagnóstico
-              </span>
-
-              {/* 2. Bloque Central */}
-              <div style={{ 
-                display: "flex", 
-                alignItems: "center", 
-                gap: "12px", 
-                margin: "12px 0" 
-              }}>
-                {/* Microindicador LED */}
-                <div style={{ 
-                  color: st.accent,
-                  background: `color-mix(in srgb, ${st.accent} 12%, transparent)`,
-                  width: "42px",
-                  height: "42px",
-                  borderRadius: "8px",
+        {/* CONTENEDOR GRID DE DOS COLUMNAS */}
+        <div className="mon-workspace-layout">
+          
+          {/* COLUMNA IZQUIERDA: Métricas, Gráfica y Controles */}
+          <div className="mon-main-column">
+            
+            {/* Fila superior */}
+            <div className="mon-top">
+              {/* Estado Diagnóstico */}
+              <div className="mon-card"
+                style={{ 
+                  borderColor: `color-mix(in srgb, ${st.accent} 30%, var(--c-border))`,
+                  boxShadow: `0 0 12px color-mix(in srgb, ${st.accent} 12%, transparent)`,
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: `1px solid color-mix(in srgb, ${st.accent} 30%, transparent)`
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  height: "100%"
                 }}>
-                  <i className={`ti ${st.icon}`} style={{ fontSize: "22px" }} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--c-muted)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: "600" }}>
+                  Diagnóstico
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "14px 0" }}>
+                  <div style={{ color: st.accent, background: `color-mix(in srgb, ${st.accent} 15%, transparent)`, width: "48px", height: "48px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid color-mix(in srgb, ${st.accent} 35%, transparent)` }} >
+                    <i className={`ti ${st.icon}`} style={{ fontSize: "24px" }} />
+                  </div>
+                  <span style={{ color: st.accent, fontSize: "22px", fontWeight: "700", letterSpacing: "-0.02em" }}>
+                    {st.label}
+                  </span>
                 </div>
-
-                {/* Texto de Estado Principal */}
-                <span style={{ 
-                  color: st.accent, 
-                  fontSize: "24px", 
-                  fontWeight: "600",
-                  letterSpacing: "-0.02em"
-                }}>
-                  {st.label}
+                <span style={{ fontSize: "12px", color: "var(--c-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: "500" }}>
+                  {st.desc}
                 </span>
               </div>
 
-              {/* 3. Descripción Inferior */}
-              <span style={{ 
-                fontSize: "13px", 
-                color: "var(--c-muted)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis"
-              }}>
-                {st.desc}
+              {/* Panel de Métricas */}
+              <div className="mon-metrics">
+                <div className="mon-metric-card" style={{ borderColor: stateKey !== "idle" ? `color-mix(in srgb, ${st.accent} 30%, var(--c-border))` : undefined }}>
+                  <div className="mon-metric-label">Frecuencia Cardíaca</div>
+                  <div>
+                    <span className="mon-metric-value" style={{ color: st.accent }}>
+                      {metrics.bpm === "--" ? "—" : Math.round(Number(metrics.bpm))}
+                    </span>
+                    <span className="mon-metric-unit">bpm</span>
+                  </div>
+                  <div className="mon-metric-sub">{st.label}</div>
+                </div>
+
+                <div className="mon-metric-card">
+                  <div className="mon-metric-label">Intervalo R-R</div>
+                  <div>
+                    <span className="mon-metric-value">{lastRR}</span>
+                    <span className="mon-metric-unit">ms</span>
+                  </div>
+                  <div className="mon-metric-sub">
+                    {lastRR !== "--" ? `≈ ${(lastRR/1000).toFixed(2)} s` : "sin señal"}
+                  </div>
+                </div>
+
+                <div className="mon-metric-card">
+                  <div className="mon-metric-label">Total de Latidos</div>
+                  <div>
+                    <span className="mon-metric-value" style={{ color: "var(--c-accent)" }}>
+                      {displayBeats}
+                    </span>
+                    <span className="mon-metric-unit">qrs</span>
+                  </div>
+                  <div className="mon-metric-sub">
+                    {metrics.bpm !== "--" && bpmValid > 0 ? "detección activa" : "esperando datos..."}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfica ECG */}
+            <div className="mon-card">
+              <div className="mon-chart-header">
+                <div>
+                  <div className="mon-chart-title">Señal ECG en Tiempo Real</div>
+                  <div className="mon-chart-sub">{`${FS} Hz · Monitoreo Continuo de Ritmo Cardíaco`}</div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:18 }}>
+                  <div className="mon-legend">
+                    <div className="mon-legend-item">
+                      <div className="mon-legend-dot" style={{ background:"color-mix(in srgb, var(--c-accent) 40%, transparent)" }} />
+                      señal cruda
+                    </div>
+                    <div className="mon-legend-item">
+                      <div className="mon-legend-dot" style={{ background:"var(--c-accent)" }} />
+                      filtrada
+                    </div>
+                    <div className="mon-legend-item">
+                      <div className="mon-legend-dot" style={{ background:"var(--c-danger)", borderRadius:"50%", width:7, height:7 }} />
+                      R-peak
+                    </div>
+                  </div>
+                  <div className={`mon-signal-dot ${(isConnected || mode==="offline") ? "live" : "off"}`} />
+                </div>
+              </div>
+
+              <div style={{ width:"100%", height: 340, background: "var(--c-bg)", borderRadius: 10, overflow: "hidden", border: "1px solid var(--c-border)" }}>
+                <LiveChart getBuffer={getBuffer} getRPeaks={getRPeaks} dualChannel={true} signalType="filtered" fs={FS} theme="app" />
+              </div>
+
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:14, flexWrap:"wrap", gap:12 }}>
+                <div className="mon-indicator-panel">
+                  <div className="mon-indicator-badge">
+                    <span className="mon-badge-label">Ventana:</span>
+                    <span className="mon-badge-value">{(VISIBLE_SAMPLES / FS).toFixed(1)} s</span>
+                  </div>
+                  {typeof metrics.sampleCount === "number" && (
+                    <>
+                      <div className="mon-indicator-badge">
+                        <span className="mon-badge-label">Tiempo:</span>
+                        <span className="mon-badge-value accent">{samplesTo(metrics.sampleCount)}</span>
+                      </div>
+                      <div className="mon-indicator-badge">
+                        <span className="mon-badge-label">Muestras:</span>
+                        <span className="mon-badge-value">{metrics.sampleCount.toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--c-muted)", letterSpacing:"0.02em" }}>
+                  {mode === "offline" ? "PhysioNet · MIT-BIH Database" : `Dispositivo Embebido · ${metrics.min ?? 0}–${metrics.max ?? 0} ADC`}
+                </span>
+              </div>
+            </div>
+
+            {/* Barra inferior */}
+            <div className="mon-bottom">
+              <div className="mon-info-bar">
+                <i className="ti ti-heart-handshake mon-info-icon" />
+                <p className="mon-info-text">
+                  {session
+                    ? `Sesión activa · ${fmtSec(elapsed)} transcurridos · los datos se guardarán al terminar.`
+                    : mode === "offline"
+                    ? "Modo de validación con registros MIT-BIH. Inicia una sesión para guardar las métricas."
+                    : isConnected
+                    ? "WebSocket conectado. Presiona 'Iniciar Sesión' para comenzar a almacenar el historial."
+                    : "Por favor, establece conexión con el WebSocket antes de iniciar sesión."}
+                </p>
+              </div>
+              {!session
+                ? <button className="mon-btn-start" onClick={startSession} disabled={!canStartSession}>
+                    <i className="ti ti-play" style={{ fontSize:15 }} /> Iniciar
+                  </button>
+                : <button className="mon-btn-stop" onClick={endSession}>
+                    <i className="ti ti-square" style={{ fontSize:15 }} /> Terminar
+                  </button>}
+            </div>
+
+            {/* Selector CSV */}
+            {mode === "offline" && !session && (
+              <div className="mon-csv-row">
+                <span className="mon-csv-label">Registro MIT-BIH</span>
+                <select className="mon-select" value={csvPath} onChange={e => setCsvPath(e.target.value)}>
+                  {RECORDS.map(r => (
+                    <option key={r.path} value={r.path}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* COLUMNA DERECHA NUEVA: Panel de Biofeedback Visual (Pulso) */}
+          <div className="mon-side-column mon-card" 
+            style={{ 
+              borderColor: stateKey !== "idle" ? `color-mix(in srgb, ${st.accent} 30%, var(--c-border))` : undefined,
+              boxShadow: stateKey !== "idle" ? `0 4px 20px color-mix(in srgb, ${st.accent} 8%, transparent)` : undefined
+            }}>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="mon-metric-label">Biofeedback Visual</span>
+              <span style={{ fontSize: 11, color: "var(--c-muted)", fontFamily: "var(--font-sans)" }}>
+                Modelado morfológico reactivo
               </span>
             </div>
 
-            {/* Panel de Métricas */}
-            <div className="mon-metrics">
-
-              {/* 1. Frecuencia Cardíaca */}
-              <div className="mon-metric-card"
-                style={{ borderColor: stateKey !== "idle"
-                  ? `color-mix(in srgb, ${st.accent} 25%, var(--c-border))` : undefined }}>
-                <div className="mon-metric-label">Frecuencia cardíaca</div>
-                <div>
-                  <span className="mon-metric-value" style={{ color: st.accent }}>
-                    {metrics.bpm === "--" ? "—" : Math.round(Number(metrics.bpm))}
-                  </span>
-                  <span className="mon-metric-unit">bpm</span>
-                </div>
-                <div className="mon-metric-sub">{st.label}</div>
+            {/* Zona central dedicada a la imagen o animación */}
+            <div className="mon-pulse-zone">
+              
+              {/* Marcador de posición (Placeholder animado) */}
+              {/* La clase 'beating' se activa dinámicamente si hay una señal activa */}
+              <div className={`mock-heart ${metrics.bpm !== '--' && stateKey !== 'idle' && stateKey !== 'death' ? 'beating' : ''}`}>
+                <i className="ti ti-heart" style={{ fontSize: "84px", color: st.accent, transition: "color 0.3s" }} />
               </div>
 
-              {/* 2. Intervalo R-R Instantáneo */}
-              <div className="mon-metric-card">
-                <div className="mon-metric-label">Intervalo R-R</div>
-                <div>
-                  <span className="mon-metric-value">{lastRR}</span>
-                  <span className="mon-metric-unit">ms</span>
-                </div>
-                <div className="mon-metric-sub">
-                  {lastRR !== "--" ? `≈ ${(lastRR/1000).toFixed(2)} s` : "sin señal"}
-                </div>
-              </div>
+              {stateKey !== 'idle' && stateKey !== 'death' ? (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: st.accent, fontWeight: 600 }}>
+                  Sincronizado con R-Peak
+                </span>
+              ) : (
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--c-muted)" }}>
+                  Esperando trazo...
+                </span>
+              )}
+            </div>
 
-              {/* 3. Contador de Latidos / Complejos QRS */}
-              <div className="mon-metric-card">
-                <div className="mon-metric-label">Total de Latidos</div>
-                <div>
-                  <span className="mon-metric-value" style={{ color: "var(--c-accent2)" }}>
-                    {displayBeats}
-                  </span>
-                  <span className="mon-metric-unit">qrs</span>
-                </div>
-                <div className="mon-metric-sub">
-                  {metrics.bpm !== "--" && bpmValid > 0 ? "detección activa de picos" : "esperando complejos..."}
-                </div>
-              </div>
-
+            <div className="mon-side-footer">
+              Canal ECG-Ch1 Activo
             </div>
           </div>
 
-          {/* Gráfica ECG */}
-          <div className="mon-card">
-            <div className="mon-chart-header">
-              <div>
-                <div className="mon-chart-title">Canal de Instrumentación ECG</div>
-                <div className="mon-chart-sub">
-                  {`${FS} Hz · Muestreo y Filtrado Asíncrono Continuo`}
-                </div>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-                <div className="mon-legend">
-                  <div className="mon-legend-item">
-                    <div className="mon-legend-dot"
-                      style={{ background:"rgba(124,109,250,0.35)" }} />
-                    señal cruda (adc)
-                  </div>
-                  <div className="mon-legend-item">
-                    <div className="mon-legend-dot" style={{ background:"var(--c-accent2)" }} />
-                    filtrada (dsp)
-                  </div>
-                  <div className="mon-legend-item">
-                    <div className="mon-legend-dot"
-                      style={{ background:"var(--c-danger)", borderRadius:"50%", width:7, height:7 }} />
-                    R-peak
-                  </div>
-                </div>
-                <div className={`mon-signal-dot ${(isConnected || mode==="offline") ? "live" : "off"}`} />
-              </div>
-            </div>
+        </div>
 
-            {/* Trazo en modo dual */}
-            <div style={{ width:"100%", height: 340, background: "var(--c-bg)", borderRadius: 10, overflow: "hidden" }}>
-              <LiveChart
-                getBuffer={getBuffer}
-                getRPeaks={getRPeaks}
-                dualChannel={true}
-                signalType="filtered"
-                fs={FS}
-                theme="app"
-              />
-            </div>
-
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
-              <div className="mon-indicator-panel">
-                <div className="mon-indicator-badge">
-                  <span className="mon-badge-label">Ventana:</span>
-                  <span className="mon-badge-value">{(VISIBLE_SAMPLES / FS).toFixed(1)} s</span>
-                </div>
-                
-                {typeof metrics.sampleCount === "number" && (
-                  <>
-                    <div className="mon-indicator-badge" style={{ borderColor: "color-mix(in srgb, var(--c-accent) 25%, var(--c-border2))" }}>
-                      <span className="mon-badge-label" style={{ color: "var(--c-accent2)" }}>Tiempo Muestras:</span>
-                      <span className="mon-badge-value accent">{samplesTo(metrics.sampleCount)}</span>
-                    </div>
-                    <div className="mon-indicator-badge">
-                      <span className="mon-badge-label">Total N:</span>
-                      <span className="mon-badge-value">{metrics.sampleCount.toLocaleString()}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--c-faint)", letterSpacing:"0.02em" }}>
-                {mode === "offline" ? "PhysioNet · MIT-BIH Database"
-                  : `Hardware Embebido · ${metrics.min ?? 0}–${metrics.max ?? 0} ADC`}
-              </span>
-            </div>
-          </div>
-
-          {/* Barra inferior */}
-          <div className="mon-bottom">
-            <div className="mon-info-bar">
-              <i className="ti ti-info-circle mon-info-icon" />
-              <p className="mon-info-text">
-                {session
-                  ? `Sesión activa · ${fmtSec(elapsed)} transcurridos · los datos se guardarán al terminar.`
-                  : mode === "offline"
-                  ? "Modo de validación con registros MIT-BIH. Inicia una sesión para guardar las métricas."
-                  : isConnected
-                  ? "WebSocket conectado. Presiona 'Iniciar Sesión' para comenzar a almacenar el historial."
-                  : "Por favor, establece conexión con el WebSocket antes de iniciar sesión."}
-              </p>
-            </div>
-            {!session
-              ? <button className="mon-btn-start" onClick={startSession} disabled={!canStartSession}>
-                  <i className="ti ti-player-play" style={{ fontSize:14 }} />
-                  Iniciar sesión
-                </button>
-              : <button className="mon-btn-stop" onClick={endSession}>
-                  <i className="ti ti-player-stop" style={{ fontSize:14 }} />
-                  Terminar
-                </button>}
-          </div>
-
-          {/* Selector CSV */}
-          {mode === "offline" && !session && (
-            <div className="mon-csv-row">
-              <span className="mon-csv-label">Registro MIT-BIH</span>
-              <select className="mon-select" value={csvPath}
-                onChange={e => setCsvPath(e.target.value)}>
-                {RECORDS.map(r => (
-                  <option key={r.path} value={r.path}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="mon-footer">
-            {mode === "offline"
-              ? "physionet.org · MIT-BIH Arrhythmia Database · datos de dominio público"
-              : `WebSocket · ${wsUrl}`}
-          </div>
+        {/* Footer fuera de las columnas para que abarque el centro inferior */}
+        <div className="mon-footer">
+          {mode === "offline"
+            ? "physionet.org · MIT-BIH Arrhythmia Database · datos de dominio público"
+            : `WebSocket · ${wsUrl}`}
         </div>
       </div>
     </>

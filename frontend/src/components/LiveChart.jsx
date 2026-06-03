@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-// Paleta por tema
+// Paleta por tema - Actualizada con colores claros y amigables
 const THEMES = {
   terminal: {
     background: "#0a0f0a",
@@ -15,15 +15,15 @@ const THEMES = {
     glow:       true,
   },
   app: {
-    background: "#0e0e10",                 
-    grid:       "rgba(255, 255, 255, 0.02)",
-    gridBold:   "rgba(255, 255, 255, 0.05)",
-    raw:        "rgba(124, 109, 250, 0.35)",
-    filtered:   "#a594fb",                 
-    rPeak:      "#f87171",                 
-    label:      "#707088",                 
-    timeLabel:  "#3a3a44",                 
-    divider:    "#2a2a32",                 
+    background: "#F8FBFE",                 
+    grid:       "rgba(41, 113, 163, 0.08)",
+    gridBold:   "rgba(41, 113, 163, 0.15)",
+    raw:        "rgba(79, 172, 254, 0.4)",
+    filtered:   "#2471A3",                 
+    rPeak:      "#E67E22",                 
+    label:      "#2E5C8A",                 
+    timeLabel:  "#5499C7",                 
+    divider:    "rgba(41, 113, 163, 0.12)",                 
     glow:       false,
   },
 };
@@ -61,12 +61,12 @@ export default function LiveChart({
     // Grilla Médica 
     function drawGrid(W, H, yOffset = 0, height = H) {
       // 1. Líneas horizontales estáticas (Eje Y / Amplitud)
-      ctx.lineWidth   = 0.5;
+      ctx.lineWidth   = 0.6;
       ctx.strokeStyle = COLORS.grid;
       for (let y = 0; y < height; y += 20) {
         ctx.beginPath(); ctx.moveTo(0, yOffset + y); ctx.lineTo(W, yOffset + y); ctx.stroke();
       }
-      ctx.lineWidth   = 1;
+      ctx.lineWidth   = 1.2;
       ctx.strokeStyle = COLORS.gridBold;
       for (let y = 0; y < height; y += 100) {
         ctx.beginPath(); ctx.moveTo(0, yOffset + y); ctx.lineTo(W, yOffset + y); ctx.stroke();
@@ -82,7 +82,7 @@ export default function LiveChart({
         const x = (currentSec / totalSeconds) * W;
 
         const isBold = currentSec % 1.0 === 0;
-        ctx.lineWidth   = isBold ? 1 : 0.5;
+        ctx.lineWidth   = isBold ? 1.2 : 0.6;
         ctx.strokeStyle = isBold ? COLORS.gridBold : COLORS.grid;
 
         ctx.beginPath();
@@ -113,7 +113,7 @@ export default function LiveChart({
       // Dibujo de la traza de senal continua
       ctx.beginPath();
       ctx.strokeStyle = color;
-      ctx.lineWidth   = 1.5;
+      ctx.lineWidth   = 2;
       if (COLORS.glow) { ctx.shadowColor = color; ctx.shadowBlur = 4; }
       for (let i = 0; i < n; i++) {
         const x = (i / (n - 1)) * W;
@@ -141,22 +141,29 @@ export default function LiveChart({
           
           // Círculo del pico R localizado
           ctx.beginPath();
-          ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+          ctx.arc(px, py, 4, 0, Math.PI * 2);
           ctx.fill();
+          
+          // Anillo alrededor del pico para mejor visibilidad
+          ctx.strokeStyle = COLORS.rPeak;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.stroke();
         }
         ctx.shadowBlur = 0;
       }
 
       // Etiquetas informativas de hardware del carril
       ctx.fillStyle = COLORS.label;
-      ctx.font      = "500 10px 'DM Sans', system-ui, sans-serif";
+      ctx.font      = "600 11px 'DM Sans', system-ui, sans-serif";
       ctx.fillText(label, 12, yOffset + 18);
     }
 
     function drawDivider(W, y) {
       ctx.strokeStyle = COLORS.divider;
-      ctx.lineWidth   = 1;
-      ctx.setLineDash([4, 6]);
+      ctx.lineWidth   = 1.5;
+      ctx.setLineDash([5, 7]);
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -185,7 +192,7 @@ export default function LiveChart({
           yOffset: 0,
           laneH,
           color:   COLORS.raw,
-          label:   `CANAL 01 [RAW_DATA] · SWEEP: ${visS}s · SR: ${fs}Hz`,
+          label:   `CANAL 01 [SEÑAL CRUDA] · BARRIDO: ${visS}s · SR: ${fs}Hz`,
           peaks:   [], 
         });
 
@@ -200,7 +207,7 @@ export default function LiveChart({
           yOffset: laneH,
           laneH,
           color:   COLORS.filtered,
-          label:   `CANAL 02 [FILTRADO_DSP] · BPF: 0.5–45 Hz · NOTCH: 60 Hz`,
+          label:   `CANAL 02 [SEÑAL FILTRADA] · FILTRO PASA-BANDA: 0.5–45 Hz · NOTCH: 60 Hz`,
           peaks:   peakTimes, 
         });
       } 
