@@ -32,7 +32,4 @@ backend/.venv/
 
 repomix-output.txt
 
-frontend/public/100.csv
-frontend/public/106.csv
-frontend/public/119.csv
-frontend/public/208.csv
+frontend/public/*.csv
