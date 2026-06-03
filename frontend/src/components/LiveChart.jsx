@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-// Paleta por tema - Actualizada con colores claros y amigables
+// Paleta por tema 
 const THEMES = {
   terminal: {
     background: "#0a0f0a",

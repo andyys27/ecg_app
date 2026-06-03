@@ -468,11 +468,7 @@ export default function Monitor() {
               ))}
             </div>
 
-            {mode === "websocket" && !session && (
-              <input className="mon-ws-input" value={wsUrl}
-                onChange={e => setWsUrl(e.target.value)}
-                placeholder="ws://localhost:8000/ws" />
-            )}
+            
 
             {showConnectBtn && !session && (
               <button className="mon-btn mon-btn-connect"
@@ -654,7 +650,7 @@ export default function Monitor() {
             )}
           </div>
 
-          {/* COLUMNA DERECHA NUEVA: Panel de Biofeedback Visual (Pulso) */}
+          {/* Panel de Biofeedback Visual (Pulso) */}
           <div className="mon-side-column mon-card" 
             style={{ 
               borderColor: stateKey !== "idle" ? `color-mix(in srgb, ${st.accent} 30%, var(--c-border))` : undefined,
@@ -672,7 +668,6 @@ export default function Monitor() {
             <div className="mon-pulse-zone">
               
               {/* Marcador de posición (Placeholder animado) */}
-              {/* La clase 'beating' se activa dinámicamente si hay una señal activa */}
               <div className={`mock-heart ${metrics.bpm !== '--' && stateKey !== 'idle' && stateKey !== 'death' ? 'beating' : ''}`}>
                 <i className="ti ti-heart" style={{ fontSize: "84px", color: st.accent, transition: "color 0.3s" }} />
               </div>
@@ -689,17 +684,10 @@ export default function Monitor() {
             </div>
 
             <div className="mon-side-footer">
-              Canal ECG-Ch1 Activo
+              Canal ECGActivo
             </div>
           </div>
 
-        </div>
-
-        {/* Footer fuera de las columnas para que abarque el centro inferior */}
-        <div className="mon-footer">
-          {mode === "offline"
-            ? "physionet.org · MIT-BIH Arrhythmia Database · datos de dominio público"
-            : `WebSocket · ${wsUrl}`}
         </div>
       </div>
     </>
