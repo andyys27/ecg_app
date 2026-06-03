@@ -84,11 +84,9 @@ export default function Dashboard() {
   return (
     <>
       <style>{`
-        /* Importación de Inter para replicar la limpieza de la app original */
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
 
         :root {
-          /* Tu Paleta Clara - Azul Celeste Amigable */
           --c-bg:      #F0F6FB;
           --c-surface: #FFFFFF;
           --c-panel:   #EBF3FA;
@@ -106,7 +104,6 @@ export default function Dashboard() {
           --c-death:   #C0392B;
           --c-idle:    #7F8C8D;
           
-          /* Fuentes Corregidas de Alta Fidelidad */
           --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
           --r:         10px;

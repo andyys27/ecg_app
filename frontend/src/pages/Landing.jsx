@@ -5,19 +5,19 @@ import { useEffect }   from "react";
 const FEATURES = [
   {
     icon: "ti-wave-sine",
-    color: "#2471A3", // Sincronizado con var(--c-accent)
+    color: "#2471A3", 
     title: "ECG en vivo",
     desc:  "500 Hz · filtrado digital con biquads",
   },
   {
     icon: "ti-bell",
-    color: "#E67E22", // Sincronizado con var(--c-warn)
+    color: "#E67E22", 
     title: "Alertas clínicas",
     desc:  "Bradicardia · taquicardia · arritmia",
   },
   {
     icon: "ti-history",
-    color: "#229B46", // Sincronizado con var(--c-ok)
+    color: "#229B46", 
     title: "Historial",
     desc:  "Seguimiento por sesión y evolución",
   },
@@ -33,7 +33,6 @@ export default function Landing() {
 
   return (
     <>
-      {/* Inyección de fuentes para asegurar consistencia exacta */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
         
@@ -43,7 +42,7 @@ export default function Landing() {
       `}</style>
 
       <div style={s.page} className="lan-page">
-        {/* ── Navbar Sincronizado ── */}
+        {/* Navbar Sincronizado */}
         <nav style={s.nav}>
           <div style={s.logo}>
             <div style={s.logoIcon}>
@@ -63,7 +62,7 @@ export default function Landing() {
           </div>
         </nav>
 
-        {/* ── Hero (Espacio muerto optimizado) ── */}
+        {/* Hero */}
         <section style={s.hero}>
           <div style={s.pill}>
             <i className="ti ti-bluetooth" style={{ fontSize: 12 }} aria-hidden="true" />
@@ -93,7 +92,7 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── Features ── */}
+        {/* Features */}
         <section style={s.features}>
           {FEATURES.map((f) => (
             <div key={f.title} style={s.featureCard} className="lan-card-item">
@@ -106,7 +105,7 @@ export default function Landing() {
           ))}
         </section>
 
-        {/* ── Footer ── */}
+        {/* Footer */}
         <footer style={s.footer}>
           <p>OndaVital · MIT-BIH Arrhythmia Database · PhysioNet</p>
         </footer>
@@ -115,7 +114,6 @@ export default function Landing() {
   );
 }
 
-// Estilos Reestructurados (Paleta Clara y Tipografías Nuevas)
 const s = {
   page: {
     background:  "#F0F6FB", // var(--c-bg)
@@ -168,7 +166,7 @@ const s = {
     alignItems:     "center",
     justifyContent: "center",
     textAlign:      "center",
-    padding:        "64px 24px", // Balanceo de espacio muerto para centrar armónicamente
+    padding:        "64px 24px", 
     maxWidth:       720,
     margin:         "0 auto",
     gap:            22,
@@ -195,7 +193,7 @@ const s = {
   },
   heroSub: {
     fontSize:   15,
-    color:      "#4A7FA7", // var(--c-muted)
+    color:      "#4A7FA7", 
     maxWidth:   540,
     lineHeight: 1.6,
     fontWeight: 500,
@@ -211,7 +209,7 @@ const s = {
     width:               "100%",
   },
   featureCard: {
-    background:   "#FFFFFF", // var(--c-surface)
+    background:   "#FFFFFF", 
     border:       "1px solid #C5DDF1",
     borderRadius: 14,
     padding:      "24px",

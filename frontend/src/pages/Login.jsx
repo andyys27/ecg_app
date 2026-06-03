@@ -122,10 +122,9 @@ export default function Login() {
   );
 }
 
-// Estilos Reestructurados (Paleta Clara e Inter)
 const s = {
   page: {
-    background:     "#F0F6FB", // var(--c-bg)
+    background:     "#F0F6FB", 
     minHeight:      "100vh",
     display:        "flex",
     alignItems:     "center",
@@ -135,8 +134,8 @@ const s = {
     WebkitFontSmoothing: "antialiased",
   },
   card: {
-    background:   "#FFFFFF", // var(--c-surface)
-    border:       "1px solid #C5DDF1", // var(--c-border)
+    background:   "#FFFFFF", 
+    border:       "1px solid #C5DDF1", 
     borderRadius: 16,
     padding:      "36px 32px",
     width:        "100%",
@@ -146,7 +145,7 @@ const s = {
   logoIcon: {
     width:          38,
     height:         38,
-    background:     "linear-gradient(135deg, #2471A3, #2E86C1)", // var(--c-accent)
+    background:     "linear-gradient(135deg, #2471A3, #2E86C1)", 
     borderRadius:   8,
     display:        "flex",
     alignItems:     "center",
@@ -156,13 +155,13 @@ const s = {
   title: {
     fontSize:     22,
     fontWeight:   800,
-    color:        "#0F3D5C", // var(--c-text)
+    color:        "#0F3D5C", 
     letterSpacing: "-0.02em",
     marginBottom: 4,
   },
   sub: {
     fontSize:     14,
-    color:        "#4A7FA7", // var(--c-muted)
+    color:        "#4A7FA7", 
     fontWeight:   500,
     marginBottom: 24,
   },
@@ -214,7 +213,7 @@ const s = {
     display:      "flex",
     alignItems:   "center",
     gap:          10,
-    background:   "rgba(231, 76, 60, 0.08)", // Tono clínico suave para errores
+    background:   "rgba(231, 76, 60, 0.08)", 
     border:       "1px solid rgba(231, 76, 60, 0.2)",
     borderRadius: 8,
     padding:      "12px",

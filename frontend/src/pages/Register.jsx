@@ -61,7 +61,6 @@ export default function Register() {
 
   return (
     <>
-      {/* Inyección de estilos globales de la marca e interactividad */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@500&display=swap');
         
@@ -84,7 +83,7 @@ export default function Register() {
             <span style={{ fontSize: 17, fontWeight: 700, color: "#0F3D5C", letterSpacing: "-0.02em" }}>OndaVital</span>
           </div>
 
-          {/* Stepper Rediseñado */}
+          {/* Stepper */}
           <div style={{ display: "flex", alignItems: "center", marginBottom: 28 }}>
             {STEPS.map((label, i) => (
               <div key={label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : 0 }}>
@@ -255,18 +254,17 @@ function ErrorBox({ msg }) {
   );
 }
 
-// Tokens de Diseño Clínico Claro Sincronizados
 const s = {
   page: {
-    background: "#F0F6FB", // var(--c-bg)
+    background: "#F0F6FB",
     minHeight: "100vh",
     display: "flex", alignItems: "center", justifyContent: "center",
     fontFamily: "'Inter', -apple-system, system-ui, sans-serif", padding: "24px",
     WebkitFontSmoothing: "antialiased",
   },
   card: {
-    background: "#FFFFFF", // var(--c-surface)
-    border: "1px solid #C5DDF1", // var(--c-border)
+    background: "#FFFFFF",
+    border: "1px solid #C5DDF1", 
     borderRadius: 16, padding: "36px 32px", width: "100%", maxWidth: 440,
     boxShadow: "0 8px 24px rgba(15, 61, 92, 0.04)",
   },

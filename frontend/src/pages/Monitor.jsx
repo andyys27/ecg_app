@@ -86,7 +86,6 @@ export default function Monitor() {
       );
     } else {
       clearInterval(timerRef.current);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setElapsed(0);
     }
     return () => clearInterval(timerRef.current);
