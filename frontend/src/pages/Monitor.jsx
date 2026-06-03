@@ -183,7 +183,8 @@ export default function Monitor() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:wght@300;400;500;600&display=swap');
+        /* Sincronización de Fuentes: Inter y Roboto Mono */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
 
         :root {
           /* Paleta Clara - Azul Celeste Amigable (Belize Hole mejorado) */
@@ -203,19 +204,21 @@ export default function Monitor() {
           --c-info:    #2E86C1;
           --c-death:   #C0392B;
           --c-idle:    #7F8C8D;
-          --font-mono: 'DM Mono', ui-monospace, monospace;
-          --font-sans: 'DM Sans', system-ui, sans-serif;
+          
+          /* Fuentes Corregidas */
+          --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          --font-mono: 'Roboto Mono', ui-monospace, SFMono-Regular, monospace;
           --r:         10px;
           --r-lg:      14px;
         }
 
         .mon-page * { box-sizing: border-box; margin: 0; padding: 0; }
-        .mon-page { background: var(--c-bg); min-height: 100vh; color: var(--c-text); font-family: var(--font-sans); text-align: left; }
+        .mon-page { background: var(--c-bg); min-height: 100vh; color: var(--c-text); font-family: var(--font-sans); text-align: left; -webkit-font-smoothing: antialiased; }
 
         .mon-page::before {
           content: '';
           position: fixed; inset: 0;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
           background-size: 180px;
           pointer-events: none;
           z-index: 0;
@@ -226,34 +229,33 @@ export default function Monitor() {
         .mon-nav {
           display: flex; align-items: center; justify-content: space-between;
           padding: 0 32px; height: 56px;
-          background: color-mix(in srgb, var(--c-surface) 85%, transparent);
+          background: color-mix(in srgb, var(--c-surface) 90%, transparent);
           border-bottom: 1px solid var(--c-border);
-          backdrop-filter: blur(8px);
+          backdrop-filter: blur(16px);
           position: sticky; top: 0; z-index: 20;
-          box-shadow: 0 2px 8px color-mix(in srgb, var(--c-accent) 8%, transparent);
+          box-shadow: 0 2px 8px color-mix(in srgb, var(--c-accent) 4%, transparent);
         }
 
         .mon-logo-mark {
           width: 36px; height: 36px; border-radius: 8px;
           background: linear-gradient(135deg, var(--c-accent), var(--c-info));
           display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 4px 12px color-mix(in srgb, var(--c-accent) 35%, transparent);
+          box-shadow: 0 4px 12px color-mix(in srgb, var(--c-accent) 25%, transparent);
         }
 
-        .mon-logo-text { font-family: var(--font-sans); font-size: 16px; font-weight: 600; color: var(--c-text); letter-spacing: -0.02em; }
+        .mon-logo-text { font-family: var(--font-sans); font-size: 17px; font-weight: 700; color: var(--c-text); letter-spacing: -0.02em; }
         .mon-logo-sub { font-size: 11px; color: var(--c-muted); font-family: var(--font-mono); letter-spacing: 0.04em; }
 
         .mon-mode-bar { display: flex; background: var(--c-surface); border: 1px solid var(--c-border2); border-radius: 8px; padding: 4px; gap: 3px; }
         .mon-mode-btn {
           padding: 6px 15px; border-radius: 6px; border: none;
-          font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+          font-family: var(--font-sans); font-size: 12px; font-weight: 600;
           cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
         }
         .mon-mode-btn.active {
           background: linear-gradient(135deg, var(--c-accent), var(--c-info));
           color: white;
-          font-weight: 600;
-          box-shadow: 0 3px 12px color-mix(in srgb, var(--c-accent) 50%, transparent);
+          box-shadow: 0 3px 12px color-mix(in srgb, var(--c-accent) 40%, transparent);
         }
         .mon-mode-btn:not(.active) { background: transparent; color: var(--c-text); opacity: 0.7; }
         .mon-mode-btn:not(.active):hover { color: var(--c-accent); opacity: 1; }
@@ -262,19 +264,18 @@ export default function Monitor() {
         .mon-btn {
           display: inline-flex; align-items: center; gap: 6px;
           border-radius: 8px; border: none; cursor: pointer;
-          font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+          font-family: var(--font-sans); font-size: 12px; font-weight: 600;
           padding: 8px 16px; transition: all 0.2s;
         }
         .mon-btn-ghost { background: var(--c-panel); border: 1px solid var(--c-border2); color: var(--c-muted); }
         .mon-btn-ghost:hover { color: var(--c-accent); border-color: var(--c-accent); }
         .mon-btn-connect {
-          background: color-mix(in srgb, var(--c-accent) 15%, transparent);
+          background: color-mix(in srgb, var(--c-accent) 12%, transparent);
           border: 1px solid var(--c-border2);
           color: var(--c-accent);
         }
-        .mon-btn-connect:hover { background: color-mix(in srgb, var(--c-accent) 25%, transparent); border-color: var(--c-accent); }
+        .mon-btn-connect:hover { background: color-mix(in srgb, var(--c-accent) 20%, transparent); border-color: var(--c-accent); }
 
-        /* NUEVO CONFIGURACIÓN DE ESPACIO DE TRABAJO (GRID DE 2 COLUMNAS) */
         .mon-workspace-layout { 
           max-width: 1440px; 
           margin: 0 auto; 
@@ -285,20 +286,14 @@ export default function Monitor() {
           align-items: start;
         }
 
-        /* Columna principal izquierda */
-        .mon-main-column {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
+        .mon-main-column { display: flex; flex-direction: column; gap: 20px; }
 
-        /* Columna lateral derecha para la imagen del pulso */
         .mon-side-column {
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           height: 100%;
-          min-height: 520px; /* Consistencia visual con el alto de las gráficas */
+          min-height: 520px;
           background: var(--c-surface);
         }
 
@@ -312,13 +307,12 @@ export default function Monitor() {
           padding: 20px;
         }
 
-        /* Simulación de animación de latido para probar el feedback visual */
         .mock-heart.beating {
-          animation: pulse-animation 0.5s infinite alternate ease-in-out;
+          animation: pulse-animation 0.45s infinite alternate ease-in-out;
         }
         @keyframes pulse-animation {
           0% { transform: scale(1); opacity: 0.85; }
-          100% { transform: scale(1.2); opacity: 1; filter: drop-shadow(0 0 12px var(--c-danger)); }
+          100% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 12px var(--c-danger)); }
         }
 
         .mon-side-footer {
@@ -334,16 +328,12 @@ export default function Monitor() {
         }
 
         @media (max-width: 1100px) {
-          .mon-workspace-layout {
-            grid-template-columns: 1fr; /* Se apila en una sola columna en pantallas medianas */
-          }
-          .mon-side-column {
-            min-height: 300px;
-          }
+          .mon-workspace-layout { grid-template-columns: 1fr; }
+          .mon-side-column { min-height: 300px; }
         }
 
-        .mon-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-lg); padding: 24px; transition: all 0.2s; box-shadow: 0 1px 4px color-mix(in srgb, var(--c-accent) 5%, transparent); }
-        .mon-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 8px color-mix(in srgb, var(--c-accent) 10%, transparent); }
+        .mon-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-lg); padding: 24px; transition: all 0.2s; box-shadow: 0 1px 4px rgba(15, 61, 92, 0.02); }
+        .mon-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 8px rgba(15, 61, 92, 0.04); }
 
         .mon-top { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: stretch; }
         
@@ -359,30 +349,30 @@ export default function Monitor() {
 
         .mon-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
         .mon-metric-card { background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--r); padding: 20px; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; transition: all 0.2s; }
-        .mon-metric-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 6px color-mix(in srgb, var(--c-accent) 8%, transparent); }
+        .mon-metric-card:hover { border-color: var(--c-border2); box-shadow: 0 2px 6px rgba(15, 61, 92, 0.04); }
 
-        .mon-metric-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; color: var(--c-accent); text-transform: uppercase; letter-spacing: 0.08em; }
-        .mon-metric-value { font-family: var(--font-mono); font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: var(--c-accent2); }
-        .mon-metric-unit { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--c-accent); margin-left: 6px; }
+        .mon-metric-label { font-family: var(--font-sans); font-size: 11px; font-weight: 700; color: var(--c-accent); text-transform: uppercase; letter-spacing: 0.06em; }
+        .mon-metric-value { font-family: var(--font-sans); font-size: 28px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; color: var(--c-accent2); }
+        .mon-metric-unit { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--c-accent); margin-left: 4px; }
         .mon-metric-sub { font-family: var(--font-sans); font-size: 11px; color: var(--c-muted); margin-top: 2px; font-weight: 500; }
 
         .mon-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .mon-chart-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--c-text); }
-        .mon-chart-sub { font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); margin-top: 4px; }
+        .mon-chart-title { font-family: var(--font-sans); font-size: 14px; font-weight: 700; color: var(--c-text); }
+        .mon-chart-sub { font-family: var(--font-sans); font-size: 12px; color: var(--c-muted); margin-top: 2px; font-weight: 500; }
         .mon-legend { display: flex; align-items: center; gap: 16px; }
-        .mon-legend-item { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); }
+        .mon-legend-item { display: flex; align-items: center; gap: 6px; font-family: var(--font-sans); font-size: 11px; color: var(--c-muted); font-weight: 500; }
         .mon-legend-dot { width: 8px; height: 2px; border-radius: 1px; }
 
         .mon-signal-dot { width: 8px; height: 8px; border-radius: 50%; transition: background 0.3s, box-shadow 0.3s; }
         .mon-signal-dot.live {
           background: var(--c-ok);
-          box-shadow: 0 0 8px color-mix(in srgb, var(--c-ok) 60%, transparent);
+          box-shadow: 0 0 8px color-mix(in srgb, var(--c-ok) 50%, transparent);
           animation: pulse-dot 2s ease-in-out infinite;
         }
         .mon-signal-dot.off { background: var(--c-idle); }
         @keyframes pulse-dot {
-          0%,100% { box-shadow: 0 0 6px color-mix(in srgb, var(--c-ok) 50%, transparent); }
-          50% { box-shadow: 0 0 14px color-mix(in srgb, var(--c-ok) 80%, transparent); }
+          0%,100% { box-shadow: 0 0 6px color-mix(in srgb, var(--c-ok) 40%, transparent); }
+          50% { box-shadow: 0 0 14px color-mix(in srgb, var(--c-ok) 70%, transparent); }
         }
 
         .mon-bottom { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
@@ -392,10 +382,10 @@ export default function Monitor() {
           padding: 12px 28px; font-family: var(--font-sans); font-size: 13px;
           font-weight: 700; cursor: pointer; white-space: nowrap;
           display: inline-flex; align-items: center; gap: 8px;
-          box-shadow: 0 4px 16px color-mix(in srgb, var(--c-accent) 45%, transparent);
+          box-shadow: 0 4px 16px color-mix(in srgb, var(--c-accent) 30%, transparent);
           transition: all 0.2s;
         }
-        .mon-btn-start:hover:not(:disabled) { opacity: 0.95; transform: translateY(-2px); box-shadow: 0 6px 22px color-mix(in srgb, var(--c-accent) 55%, transparent); }
+        .mon-btn-start:hover:not(:disabled) { opacity: 0.95; transform: translateY(-2px); box-shadow: 0 6px 22px color-mix(in srgb, var(--c-accent) 40%, transparent); }
         .mon-btn-start:disabled {
           background: var(--c-panel);
           color: var(--c-muted);
@@ -405,7 +395,7 @@ export default function Monitor() {
           opacity: 0.5;
         }
         .mon-btn-stop {
-          background: color-mix(in srgb, var(--c-danger) 20%, transparent);
+          background: color-mix(in srgb, var(--c-danger) 15%, transparent);
           color: var(--c-danger);
           border: 1.5px solid var(--c-danger);
           border-radius: var(--r); padding: 12px 28px;
@@ -414,15 +404,15 @@ export default function Monitor() {
           display: inline-flex; align-items: center; gap: 8px;
           transition: all 0.2s;
         }
-        .mon-btn-stop:hover { background: color-mix(in srgb, var(--c-danger) 30%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--c-danger) 30%, transparent); }
+        .mon-btn-stop:hover { background: color-mix(in srgb, var(--c-danger) 25%, transparent); box-shadow: 0 2px 8px color-mix(in srgb, var(--c-danger) 20%, transparent); }
 
-        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1.5px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; width: 100%; box-shadow: 0 1px 4px color-mix(in srgb, var(--c-accent) 8%, transparent); }
+        .mon-info-bar { display: flex; align-items: center; gap: 12px; background: var(--c-panel); border: 1.5px solid var(--c-border); border-radius: var(--r); padding: 14px 18px; width: 100%; box-shadow: 0 1px 4px rgba(15, 61, 92, 0.01); }
         .mon-info-icon { font-size: 18px; color: var(--c-accent); flex-shrink: 0; }
         .mon-info-text { font-family: var(--font-sans); font-size: 12px; color: var(--c-text); line-height: 1.6; font-weight: 500; }
 
         .mon-csv-row { display: flex; align-items: center; gap: 12px; }
-        .mon-csv-label { font-family: var(--font-mono); font-size: 11px; color: var(--c-muted); white-space: nowrap; }
-        .mon-select { flex: 1; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 9px 12px; color: var(--c-text); font-family: var(--font-sans); font-size: 12px; outline: none; transition: all 0.2s; cursor: pointer; }
+        .mon-csv-label { font-family: var(--font-sans); font-size: 11px; color: var(--c-muted); white-space: nowrap; font-weight: 600; text-transform: uppercase; }
+        .mon-select { flex: 1; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; padding: 9px 12px; color: var(--c-text); font-family: var(--font-sans); font-size: 12px; outline: none; transition: all 0.2s; cursor: pointer; font-weight: 500; }
         .mon-select:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 15%, transparent); }
 
         .mon-footer { font-family: var(--font-mono); font-size: 10px; color: var(--c-muted); text-align: center; padding: 24px 0 12px; letter-spacing: 0.04em; }
@@ -434,9 +424,9 @@ export default function Monitor() {
           background: var(--c-panel); border: 1px solid var(--c-border);
           border-radius: 6px; padding: 5px 12px; display: flex; align-items: center; gap: 6px;
         }
-        .mon-badge-label { font-family: var(--font-sans); font-size: 10px; font-weight: 600; color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-        .mon-badge-value { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--c-text); }
-        .mon-badge-value.accent { color: var(--c-accent); }
+        .mon-badge-label { font-family: var(--font-sans); font-size: 10px; font-weight: 700; color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+        .mon-badge-value { font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--c-text); }
+        .mon-badge-value.accent { color: var(--c-accent); font-family: var(--font-mono); }
       `}</style>
 
       <div className="mon-page">
@@ -450,7 +440,6 @@ export default function Monitor() {
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
               <span className="mon-logo-text">OndaVital</span>
-              <span className="mon-logo-sub">Monitor</span>
             </div>
           </div>
 
@@ -468,8 +457,6 @@ export default function Monitor() {
               ))}
             </div>
 
-            
-
             {showConnectBtn && !session && (
               <button className="mon-btn mon-btn-connect"
                 onClick={isConnected ? handleDisconnect : handleConnect}>
@@ -486,10 +473,10 @@ export default function Monitor() {
           </div>
         </nav>
 
-        {/* CONTENEDOR GRID DE DOS COLUMNAS */}
+        {/* Workspace Layout */}
         <div className="mon-workspace-layout">
           
-          {/* COLUMNA IZQUIERDA: Métricas, Gráfica y Controles */}
+          {/* Columna Principal */}
           <div className="mon-main-column">
             
             {/* Fila superior */}
@@ -504,7 +491,7 @@ export default function Monitor() {
                   justifyContent: "space-between",
                   height: "100%"
                 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--c-muted)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: "600" }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: "11px", color: "var(--c-muted)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: "700" }}>
                   Diagnóstico
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: "14px", margin: "14px 0" }}>
@@ -536,7 +523,7 @@ export default function Monitor() {
                 <div className="mon-metric-card">
                   <div className="mon-metric-label">Intervalo R-R</div>
                   <div>
-                    <span className="mon-metric-value">{lastRR}</span>
+                    <span className="mon-metric-value" style={{ fontFamily: "var(--font-mono)" }}>{lastRR}</span>
                     <span className="mon-metric-unit">ms</span>
                   </div>
                   <div className="mon-metric-sub">
@@ -547,7 +534,7 @@ export default function Monitor() {
                 <div className="mon-metric-card">
                   <div className="mon-metric-label">Total de Latidos</div>
                   <div>
-                    <span className="mon-metric-value" style={{ color: "var(--c-accent)" }}>
+                    <span className="mon-metric-value" style={{ color: "var(--c-accent)", fontFamily: "var(--font-mono)" }}>
                       {displayBeats}
                     </span>
                     <span className="mon-metric-unit">qrs</span>
@@ -603,12 +590,12 @@ export default function Monitor() {
                       </div>
                       <div className="mon-indicator-badge">
                         <span className="mon-badge-label">Muestras:</span>
-                        <span className="mon-badge-value">{metrics.sampleCount.toLocaleString()}</span>
+                        <span className="mon-badge-value" style={{ fontFamily: "var(--font-mono)" }}>{metrics.sampleCount.toLocaleString()}</span>
                       </div>
                     </>
                   )}
                 </div>
-                <span style={{ fontFamily:"var(--font-mono)", fontSize:10, color:"var(--c-muted)", letterSpacing:"0.02em" }}>
+                <span style={{ fontFamily:"var(--font-sans)", fontSize:11, color:"var(--c-muted)", letterSpacing:"0.02em", fontWeight: 500 }}>
                   {mode === "offline" ? "PhysioNet · MIT-BIH Database" : `Dispositivo Embebido · ${metrics.min ?? 0}–${metrics.max ?? 0} ADC`}
                 </span>
               </div>
@@ -659,32 +646,20 @@ export default function Monitor() {
             
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <span className="mon-metric-label">Biofeedback Visual</span>
-              <span style={{ fontSize: 11, color: "var(--c-muted)", fontFamily: "var(--font-sans)" }}>
+              <span style={{ fontSize: 11, color: "var(--c-muted)", fontFamily: "var(--font-sans)", fontWeight: 500 }}>
                 Modelado morfológico reactivo
               </span>
             </div>
 
-            {/* Zona central dedicada a la imagen o animación */}
+            {/* Zona central dedicada al pulso */}
             <div className="mon-pulse-zone">
-              
-              {/* Marcador de posición (Placeholder animado) */}
-              <div className={`mock-heart ${metrics.bpm !== '--' && stateKey !== 'idle' && stateKey !== 'death' ? 'beating' : ''}`}>
-                <i className="ti ti-heart" style={{ fontSize: "84px", color: st.accent, transition: "color 0.3s" }} />
+              <div className={`mock-heart ${metrics.bpm !== '--' && stateKey !== 'idle' && stateKey !== 'death' ? 'beating' : ''}`} style={{ color: st.accent }}>
+                <i className="ti ti-heart-filled" style={{ fontSize: 72 }} />
               </div>
-
-              {stateKey !== 'idle' && stateKey !== 'death' ? (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: st.accent, fontWeight: 600 }}>
-                  Sincronizado con R-Peak
-                </span>
-              ) : (
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--c-muted)" }}>
-                  Esperando trazo...
-                </span>
-              )}
             </div>
 
             <div className="mon-side-footer">
-              Canal ECGActivo
+              Estación Activa · {mode === "offline" ? "Simulación" : "Live Streaming"}
             </div>
           </div>
 

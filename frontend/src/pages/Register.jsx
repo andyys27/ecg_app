@@ -60,162 +60,183 @@ export default function Register() {
   }
 
   return (
-    <div style={s.page}>
-      <div style={s.card}>
-        {/* Logo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-          <div style={s.logoIcon}>
-            <i className="ti ti-activity" style={{ fontSize: 20, color: "#fff" }} aria-hidden="true" />
-          </div>
-          <span style={{ fontSize: 16, fontWeight: 500, color: "#e8eaf0" }}>CardioSense</span>
-        </div>
+    <>
+      {/* Inyección de estilos globales de la marca e interactividad */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@500&display=swap');
+        
+        .reg-page * { box-sizing: border-box; margin: 0; padding: 0; }
+        .reg-input:focus { border-color: #2471A3 !important; box-shadow: 0 0 0 3px rgba(36, 113, 163, 0.12) !important; }
+        .reg-btn:hover { opacity: 0.95; transform: translateY(-0.5px); transition: all 0.2s ease; }
+        .reg-btn:active { transform: translateY(0); }
+        .reg-link:hover { text-decoration: underline !important; color: #1a5276 !important; }
+      `}</style>
 
-        {/* Stepper */}
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
-          {STEPS.map((label, i) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : 0 }}>
+      <div style={s.page} className="reg-page">
+        <div style={s.card}>
+          {/* Logo Sincronizado */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+            <div style={s.logoIcon}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18, color: "white" }}>
+                <path d="M3 12h3l2-6 2 13 2-10 2 3h7" />
+              </svg>
+            </div>
+            <span style={{ fontSize: 17, fontWeight: 700, color: "#0F3D5C", letterSpacing: "-0.02em" }}>OndaVital</span>
+          </div>
+
+          {/* Stepper Rediseñado */}
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 28 }}>
+            {STEPS.map((label, i) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : 0 }}>
+                <div style={{
+                  width:          24,
+                  height:         24,
+                  borderRadius:   "50%",
+                  background:     i <= step ? "linear-gradient(135deg, #2471A3, #2E86C1)" : "#EBF3FA",
+                  border:         i <= step ? "none" : "1px solid #C5DDF1",
+                  display:        "flex",
+                  alignItems:     "center",
+                  justifyContent: "center",
+                  fontSize:       11,
+                  fontFamily:     "'Roboto Mono', monospace",
+                  color:          i <= step ? "#FFFFFF" : "#4A7FA7",
+                  fontWeight:     600,
+                  flexShrink:     0,
+                  boxShadow:      i === step ? "0 2px 6px rgba(36, 113, 163, 0.25)" : "none"
+                }}>
+                  {i < step ? <i className="ti ti-check" style={{ fontSize: 11 }} /> : i + 1}
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div style={{
+                    flex:       1,
+                    height:     2,
+                    background: i < step ? "#2471A3" : "#C5DDF1",
+                    margin:     "0 8px",
+                  }} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Paso 0: Cuenta */}
+          {step === 0 && (
+            <>
+              <h1 style={s.title}>Crear cuenta</h1>
+              <p style={s.sub}>Paso 1 de 2 · Datos de credenciales</p>
+              <form onSubmit={handleStep1} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <Field label="Nombre completo" name="nombre" placeholder="Juan Pérez"
+                  value={form.nombre} onChange={handleChange} required />
+                <Field label="Correo electrónico" name="email" type="email"
+                  placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} required />
+                <Field label="Contraseña" name="password" type="password"
+                  placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required />
+                <Field label="Confirmar contraseña" name="confirmPassword" type="password"
+                  placeholder="Repite la contraseña" value={form.confirmPassword} onChange={handleChange} required />
+                
+                {error && <ErrorBox msg={error} />}
+                <button className="reg-btn" style={s.btnPrimary} type="submit">Continuar</button>
+              </form>
+              <p style={{ textAlign: "center", fontSize: 13, color: "#4A7FA7", marginTop: 24, fontWeight: 500 }}>
+                ¿Ya tienes cuenta?{" "}
+                <Link to="/login" className="reg-link" style={{ color: "#2471A3", textDecoration: "none", fontWeight: 600 }}>Inicia sesión</Link>
+              </p>
+            </>
+          )}
+
+          {/* Paso 1: Perfil médico */}
+          {step === 1 && (
+            <>
+              <h1 style={s.title}>Perfil médico</h1>
+              <p style={s.sub}>Paso 2 de 2 · Estos datos personalizan tu análisis clínico</p>
+              <form onSubmit={handleStep2} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <Field label="Edad" name="edad" type="number" placeholder="25"
+                    value={form.edad} onChange={handleChange} />
+                  <div>
+                    <label style={s.label}>Sexo</label>
+                    <select className="reg-input" name="sexo" value={form.sexo} onChange={handleChange} style={s.input}>
+                      <option value="">Seleccionar</option>
+                      <option value="M">Masculino</option>
+                      <option value="F">Femenino</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                  </div>
+                  <Field label="Peso (kg)" name="peso_kg" type="number"
+                    placeholder="70" value={form.peso_kg} onChange={handleChange} />
+                  <Field label="Altura (cm)" name="altura_cm" type="number"
+                    placeholder="170" value={form.altura_cm} onChange={handleChange} />
+                </div>
+
+                <div style={{
+                  background:   "rgba(46, 134, 193, 0.08)",
+                  border:       "1px solid rgba(46, 134, 193, 0.2)",
+                  borderRadius: 8,
+                  padding:      "12px",
+                  fontSize:     12,
+                  color:        "#2E86C1",
+                  lineHeight:   1.5,
+                  fontWeight:   500,
+                  display:      "flex",
+                  alignItems:   "flex-start",
+                  gap:          8
+                }}>
+                  <i className="ti ti-lock" style={{ fontSize: 14, marginTop: 1 }} aria-hidden="true" />
+                  <span>Tus datos médicos son privados y se procesan de forma local para personalización opcional.</span>
+                </div>
+
+                {error && <ErrorBox msg={error} />}
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button className="reg-btn" type="button" style={s.btnGhost}
+                    onClick={() => { setStep(0); setError(""); }}>
+                    Atrás
+                  </button>
+                  <button className="reg-btn" type="submit" style={s.btnPrimary} disabled={loading}>
+                    {loading ? "Creando cuenta..." : "Crear cuenta"}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+
+          {/* Paso 2: Confirmación */}
+          {step === 2 && (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
               <div style={{
-                width:          22,
-                height:         22,
+                width:          56,
+                height:         56,
+                background:     "rgba(34, 155, 70, 0.1)",
+                border:         "1px solid rgba(34, 155, 70, 0.25)",
                 borderRadius:   "50%",
-                background:     i <= step ? "#4f8ef7" : "#1a1f2e",
-                border:         i <= step ? "none" : "0.5px solid rgba(255,255,255,0.15)",
                 display:        "flex",
                 alignItems:     "center",
                 justifyContent: "center",
-                fontSize:       11,
-                color:          i <= step ? "#fff" : "#5a6280",
-                fontWeight:     500,
-                flexShrink:     0,
+                margin:         "0 auto 20px",
+                boxShadow:      "0 4px 12px rgba(34, 155, 70, 0.1)"
               }}>
-                {i < step
-                  ? <i className="ti ti-check" style={{ fontSize: 12 }} aria-hidden="true" />
-                  : i + 1}
+                <i className="ti ti-check" style={{ fontSize: 26, color: "#229B46" }} aria-hidden="true" />
               </div>
-              {i < STEPS.length - 1 && (
-                <div style={{
-                  flex:       1,
-                  height:     1.5,
-                  background: i < step ? "#4f8ef7" : "rgba(255,255,255,0.08)",
-                  margin:     "0 6px",
-                }} />
-              )}
+              <h1 style={{ ...s.title, marginBottom: 8 }}>¡Cuenta creada!</h1>
+              <p style={{ ...s.sub, marginBottom: 24 }}>
+                Revisa tu bandeja de entrada para confirmar tu correo,<br />
+                luego inicia sesión en la plataforma.
+              </p>
+              <button className="reg-btn" style={s.btnPrimary} onClick={() => navigate("/login")}>
+                Ir a iniciar sesión
+              </button>
             </div>
-          ))}
+          )}
         </div>
-
-        {/* Cuenta */}
-        {step === 0 && (
-          <>
-            <h1 style={s.title}>Crear cuenta</h1>
-            <p style={s.sub}>Paso 1 de 2 · Datos de acceso</p>
-            <form onSubmit={handleStep1} style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-              <Field label="Nombre completo" name="nombre" placeholder="Juan Pérez"
-                value={form.nombre} onChange={handleChange} required />
-              <Field label="Correo electrónico" name="email" type="email"
-                placeholder="correo@ejemplo.com" value={form.email} onChange={handleChange} required />
-              <Field label="Contraseña" name="password" type="password"
-                placeholder="Mínimo 8 caracteres" value={form.password} onChange={handleChange} required />
-              <Field label="Confirmar contraseña" name="confirmPassword" type="password"
-                placeholder="Repite la contraseña" value={form.confirmPassword} onChange={handleChange} required />
-              {error && <ErrorBox msg={error} />}
-              <button style={s.btnPrimary} type="submit">Continuar</button>
-            </form>
-            <p style={{ textAlign: "center", fontSize: 12, color: "#5a6280", marginTop: 20 }}>
-              ¿Ya tienes cuenta?{" "}
-              <Link to="/login" style={{ color: "#4f8ef7", textDecoration: "none" }}>Inicia sesión</Link>
-            </p>
-          </>
-        )}
-
-        {/* Perfil médico*/}
-        {step === 1 && (
-          <>
-            <h1 style={s.title}>Perfil médico</h1>
-            <p style={s.sub}>Paso 2 de 2 · Estos datos personalizan tu análisis clínico</p>
-            <form onSubmit={handleStep2} style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <Field label="Edad" name="edad" type="number" placeholder="25"
-                  value={form.edad} onChange={handleChange} />
-                <div>
-                  <label style={s.label}>Sexo</label>
-                  <select name="sexo" value={form.sexo} onChange={handleChange} style={s.input}>
-                    <option value="">Seleccionar</option>
-                    <option value="M">Masculino</option>
-                    <option value="F">Femenino</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </div>
-                <Field label="Peso (kg)" name="peso_kg" type="number"
-                  placeholder="70" value={form.peso_kg} onChange={handleChange} />
-                <Field label="Altura (cm)" name="altura_cm" type="number"
-                  placeholder="170" value={form.altura_cm} onChange={handleChange} />
-              </div>
-
-              <div style={{
-                background:   "rgba(79,142,247,0.07)",
-                border:       "0.5px solid rgba(79,142,247,0.2)",
-                borderRadius: 8,
-                padding:      "10px 12px",
-                fontSize:     12,
-                color:        "#5a7aaa",
-                lineHeight:   1.5,
-              }}>
-                <i className="ti ti-lock" style={{ fontSize: 13, marginRight: 6 }} aria-hidden="true" />
-                Tus datos médicos son privados y solo se usan para personalizar el análisis. Puedes omitir cualquier campo.
-              </div>
-
-              {error && <ErrorBox msg={error} />}
-              <div style={{ display: "flex", gap: 10 }}>
-                <button type="button" style={s.btnGhost}
-                  onClick={() => { setStep(0); setError(""); }}>
-                  Atrás
-                </button>
-                <button type="submit" style={s.btnPrimary} disabled={loading}>
-                  {loading ? "Creando cuenta..." : "Crear cuenta"}
-                </button>
-              </div>
-            </form>
-          </>
-        )}
-
-        {/* Confirmación*/}
-        {step === 2 && (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{
-              width:          56,
-              height:         56,
-              background:     "rgba(79,199,164,0.12)",
-              border:         "0.5px solid rgba(79,199,164,0.3)",
-              borderRadius:   "50%",
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "center",
-              margin:         "0 auto 16px",
-            }}>
-              <i className="ti ti-check" style={{ fontSize: 28, color: "#4fc7a4" }} aria-hidden="true" />
-            </div>
-            <h1 style={{ ...s.title, marginBottom: 8 }}>¡Cuenta creada!</h1>
-            <p style={{ ...s.sub, marginBottom: 24 }}>
-              Revisa tu correo para confirmar tu cuenta,<br />
-              luego inicia sesión.
-            </p>
-            <button style={s.btnPrimary} onClick={() => navigate("/login")}>
-              Ir a iniciar sesión
-            </button>
-          </div>
-        )}
       </div>
-    </div>
+    </>
   );
 }
 
-// Componentes auxiliares
+// Componentes auxiliares perfectamente adaptados
 function Field({ label, name, type = "text", placeholder, value, onChange, required }) {
   return (
     <div>
       <label style={s.label}>{label}</label>
-      <input style={s.input} type={type} name={name} placeholder={placeholder}
+      <input className="reg-input" style={s.input} type={type} name={name} placeholder={placeholder}
         value={value} onChange={onChange} required={required} />
     </div>
   );
@@ -224,53 +245,60 @@ function Field({ label, name, type = "text", placeholder, value, onChange, requi
 function ErrorBox({ msg }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 8,
-      background: "rgba(226,75,74,0.1)", border: "0.5px solid rgba(226,75,74,0.3)",
-      borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#e24b4a",
+      display: "flex", alignItems: "center", gap: 10,
+      background: "rgba(231, 76, 60, 0.08)", border: "1px solid rgba(231, 76, 60, 0.2)",
+      borderRadius: 8, padding: "12px", fontSize: 13, color: "#C0392B", fontWeight: 500,
     }}>
-      <i className="ti ti-alert-circle" style={{ fontSize: 14 }} aria-hidden="true" />
-      {msg}
+      <i className="ti ti-alert-circle" style={{ fontSize: 15 }} aria-hidden="true" />
+      <span>{msg}</span>
     </div>
   );
 }
 
-// Estilos 
+// Tokens de Diseño Clínico Claro Sincronizados
 const s = {
   page: {
-    background: "#0d1117", minHeight: "100vh",
+    background: "#F0F6FB", // var(--c-bg)
+    minHeight: "100vh",
     display: "flex", alignItems: "center", justifyContent: "center",
-    fontFamily: "var(--font-sans, system-ui, sans-serif)", padding: "24px",
+    fontFamily: "'Inter', -apple-system, system-ui, sans-serif", padding: "24px",
+    WebkitFontSmoothing: "antialiased",
   },
   card: {
-    background: "#111318", border: "0.5px solid rgba(255,255,255,0.08)",
-    borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 440,
+    background: "#FFFFFF", // var(--c-surface)
+    border: "1px solid #C5DDF1", // var(--c-border)
+    borderRadius: 16, padding: "36px 32px", width: "100%", maxWidth: 440,
+    boxShadow: "0 8px 24px rgba(15, 61, 92, 0.04)",
   },
   logoIcon: {
-    width: 40, height: 40, background: "#4f8ef7", borderRadius: 10,
+    width: 38, height: 38, background: "linear-gradient(135deg, #2471A3, #2E86C1)", borderRadius: 8,
     display: "flex", alignItems: "center", justifyContent: "center",
+    boxShadow: "0 3px 10px rgba(36, 113, 163, 0.2)",
   },
-  title: { fontSize: 20, fontWeight: 500, color: "#e8eaf0", marginBottom: 4 },
-  sub:   { fontSize: 13, color: "#5a6280", marginBottom: 20 },
+  title: { fontSize: 22, fontWeight: 800, color: "#0F3D5C", letterSpacing: "-0.02em", marginBottom: 4 },
+  sub:   { fontSize: 14, color: "#4A7FA7", fontWeight: 500, marginBottom: 20 },
   label: {
-    display: "block", fontSize: 11, color: "#5a6280",
+    display: "block", fontSize: 11, color: "#0F3D5C",
     marginBottom: 6, textTransform: "uppercase",
-    letterSpacing: "0.06em", fontWeight: 500,
+    letterSpacing: "0.05em", fontWeight: 700,
   },
   input: {
-    width: "100%", background: "#1c2030",
-    border: "0.5px solid rgba(255,255,255,0.1)",
-    borderRadius: 8, padding: "10px 12px",
-    color: "#e8eaf0", fontSize: 14, outline: "none", boxSizing: "border-box",
+    width: "100%", background: "#FFFFFF",
+    border: "1px solid #C5DDF1",
+    borderRadius: 8, padding: "11px 14px",
+    color: "#0F3D5C", fontSize: 14, fontWeight: 500, outline: "none", boxSizing: "border-box",
+    transition: "all 0.15s ease",
   },
   btnPrimary: {
-    flex: 1, width: "100%", background: "#4f8ef7", border: "none",
-    borderRadius: 10, padding: "12px", color: "#fff",
-    fontSize: 14, fontWeight: 500, cursor: "pointer",
+    flex: 1, width: "100%", background: "linear-gradient(135deg, #2471A3, #2E86C1)", border: "none",
+    borderRadius: 8, padding: "13px", color: "#FFFFFF",
+    fontSize: 14, fontWeight: 600, cursor: "pointer",
+    boxShadow: "0 4px 12px rgba(36, 113, 163, 0.25)",
   },
   btnGhost: {
     flex: 1, background: "transparent",
-    border: "0.5px solid rgba(255,255,255,0.15)",
-    borderRadius: 10, padding: "12px", color: "#8b92a8",
-    fontSize: 14, cursor: "pointer",
+    border: "1px solid #9ECCE8",
+    borderRadius: 8, padding: "13px", color: "#2471A3",
+    fontSize: 14, fontWeight: 600, cursor: "pointer",
   },
 };
