@@ -693,14 +693,7 @@ export default function Monitor() {
             </div>
           </div>
 
-        </div>
-
-        {/* Footer fuera de las columnas para que abarque el centro inferior */}
-        <div className="mon-footer">
-          {mode === "offline"
-            ? "physionet.org · MIT-BIH Arrhythmia Database · datos de dominio público"
-            : `WebSocket · ${wsUrl}`}
-        </div>
+        </div>      
       </div>
     </>
   );
