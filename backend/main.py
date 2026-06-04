@@ -11,42 +11,49 @@
 
 # npx wscat -c ws://localhost:8000/ws
 
-# main.py - Versión Nube (Render, Railway o AWS)
 import asyncio
 import json
 import logging
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from filters import ECGProcessor  # Conservamos tu lógica DSP intacta
+from filters import ECGProcessor
+from reader import BTReader
 
+# Configuracion de logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
-log = logging.getLogger("ecg.cloud")
+log = logging.getLogger("ecg.server")
 
-app = FastAPI(title="ECG Cloud Backend")
+BT_PORT  = os.getenv("BT_PORT", "")             # Puerto Bluetooth
+ECG_FS   = int(os.getenv("ECG_FS",   "300"))    # Fs de la ESO32
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Estado global
+sample_queue: asyncio.Queue = asyncio.Queue(maxsize=300)
 
-# Almacenamiento aislado para el modo CSV offline
+# Procesadores
+processor         : ECGProcessor = ECGProcessor()
 offline_processors: dict[int, ECGProcessor] = {}
 
+# Retorna un ECGProcessor para el fs indicado
 def get_offline_processor(fs) -> ECGProcessor:
     if fs not in offline_processors:
+        log.info(f"[Offline] Creando ECGProcessor para fs={fs} Hz")
         proc = ECGProcessor()
         proc.initialize_filters(fs)
         offline_processors[fs] = proc
     return offline_processors[fs]
 
+# Clientes WebSocket conectados
+ws_clients: set[WebSocket] = set()
+
+# Modelos Pydantic para el endpoint offline
 class CsvWindowRequest(BaseModel):
     raw:   list[float] = Field(..., min_length=10, max_length=5000)
     fs:    int         = Field(..., ge=50, le=2000)
@@ -63,67 +70,147 @@ class CsvWindowResponse(BaseModel):
     min:      float
     max:      float       
 
+# Arranca BTReader en background al iniciar
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    processor.initialize_filters(ECG_FS)
+
+    reader = BTReader(port=BT_PORT)
+    log.info(f"Modo hardware activo en puerto: {BT_PORT}")
+
+    # Lector de BT
+    bt_task = asyncio.create_task(reader.start(sample_queue))
+    # Procesador y broadcast
+    proc_task = asyncio.create_task(process_and_broadcast())
+
+    yield
+
+    reader.stop()
+    bt_task.cancel()
+    proc_task.cancel()
+
+app = FastAPI(title="ECG Backend", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Tarea de procesamiento y broadcast (online)
+async def process_and_broadcast() -> None:
+    global ws_clients
+    log.info("[Online] Bucle de procesamiento y transmisión iniciado.")
+    muestra_count = 0
+    
+    while True:
+        try:
+            # Despierta de inmediato con la muestra única inyectada por el reader.py
+            esp32_sample = await sample_queue.get() 
+
+            # Cambiamos process_window por el procesador de muestras individuales de filters.py
+            packet = processor.process_single_sample(esp32_sample)
+            if not packet:
+                continue
+
+            # Transmisión directa por WebSockets
+            if ws_clients:
+                msg = json.dumps(packet)
+                dead = set()
+                for ws in ws_clients:
+                    try:
+                        await ws.send_text(msg)
+                    except Exception:
+                        dead.add(ws)
+                ws_clients -= dead
+        
+        except Exception as e:
+            log.error(f"[Online] Error en el bucle de procesamiento: {e}", exc_info=True)
+            await asyncio.sleep(1) # Evita saturar la CPU si entra en un bucle infinito de error
+
+# Endpoints
 @app.get("/")
 def root():
-    return {"status": "online", "mode": "cloud_relay", "desc": "Pipeline multi-usuario activo"}
+    return {
+        "status": "ok",
+        "mode":   "hardware",
+        "fs":     ECG_FS,
+        "clients": len(ws_clients),
+        "offline_processors": list(offline_processors.keys()),
+    }
 
+@app.get("/snapshot")
+def snapshot(n: int = 300):
+    # Devuelve los ultimos n puntos de ambas senales
+    return processor.snapshot(n)
+
+# Procesa una ventana de muestras del CSV offline
 @app.post("/process-csv", response_model=CsvWindowResponse)
 def process_csv(req: CsvWindowRequest):
     fs = req.fs
+
+    # 1. Resetear procesador si el frontend cambio de archivo
     if req.reset and fs in offline_processors:
+        log.info(f"[Offline] Reset completo del procesador y filtros para fs={fs}")
         proc = ECGProcessor()
         proc.initialize_filters(fs)
         offline_processors[fs] = proc
     else:
         proc = get_offline_processor(fs)
 
+    # 2. Validacion de seguridad para min y max
     raw_signals = req.raw if req.raw else [0.0]
     val_min = float(min(raw_signals))
     val_max = float(max(raw_signals))
 
+    # 3. Construir el paquete en el formato que espera process_window()
     esp32_packet = {
-        "raw":    req.raw, "rpeaks": [], "bpm": 0.0,
-        "color":  "NONE", "t": req.t, "min": val_min, "max": val_max,
+        "raw":    req.raw,
+        "rpeaks": [],       
+        "bpm":    0.0,      
+        "color":  "NONE",
+        "t":      req.t,
+        "min":    val_min,
+        "max":    val_max,
     }
+
     packet = proc.process_window(esp32_packet)
 
+    # 4. Retornar al diccionario de control
     if not packet or "status" in packet:
         return CsvWindowResponse(
             raw=req.raw, filtered=req.raw, bpm=0.0, peaks=[],
             color="NONE", t=req.t, min=val_min, max=val_max
         ) 
+
     return CsvWindowResponse(
-        raw=packet["raw"], filtered=packet["filtered"], bpm=packet["bpm"],
-        peaks=packet["peaks"], color=packet["color"], t=packet["t"], min=packet["min"], max=packet["max"]
+        raw      = packet["raw"],
+        filtered = packet["filtered"],
+        bpm      = packet["bpm"],
+        peaks    = packet["peaks"],
+        color    = packet["color"],
+        t        = packet["t"],
+        min      = packet["min"],
+        max      = packet["max"],
     )
 
-# ── PIPELINE WEBSOCKET REAL-TIME EN LA NUBE ──
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    
-    # ¡MAGIA MULTI-USUARIO! Instanciamos un procesador único por CADA pestaña/usuario que se conecte
-    user_processor = ECGProcessor()
-    user_processor.initialize_filters(300) # 300Hz por defecto de tu hardware
-    
-    log.info("Nuevo cliente conectado. Instanciando pipeline DSP dedicado.")
+    ws_clients.add(ws)
+    log.info(f"Cliente conectado. Total: {len(ws_clients)}")
+
+    # Al conectarse, envía un snapshot para poblar la gráfica de inmediato
+    snap = processor.snapshot(300)
+    await ws.send_text(json.dumps({"type": "snapshot", **snap}))
 
     try:
         while True:
-            # Escuchamos la muestra cruda enviada desde el Bluetooth del navegador del usuario
-            message = await ws.receive_text()
-            data = json.loads(message)
-            
-            raw_sample = float(data.get("raw", 0.0))
-
-            # Procesamos la muestra individual en su entorno aislado
-            packet = user_processor.process_single_sample(raw_sample)
-            
-            if packet:
-                # Se lo regresamos instantáneamente al navegador para que lo dibuje
-                await ws.send_text(json.dumps(packet))
-                
+            # Mantener viva la conexion recibiendo pings del cliente
+            await ws.receive_text()
     except WebSocketDisconnect:
-        log.info("Cliente desconectado de la sesión en la nube.")
-    except Exception as e:
-        log.error(f"Error procesando muestra en la nube: {e}")
+        pass
+    finally:
+        ws_clients.discard(ws)
+        log.info(f"Cliente desconectado. Total: {len(ws_clients)}")
