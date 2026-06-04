@@ -94,13 +94,24 @@ export default function Monitor() {
   const isConnected      = Boolean(metrics.connected);
   const showConnectBtn   = mode !== "offline";
 
-  const handleConnect = useCallback(() => {
-    if (!isConnected) {
+  // Cambiar estas funciones dentro de tu Monitor() en Monitor.jsx
+  const handleConnect = useCallback(async () => {
+    try {
+      // 1. Abre el WebSocket hacia el backend en internet primero
+      await btData.connectWS(wsUrl);
+      
+      // 2. Abre la ventana emergente nativa del navegador para elegir el Bluetooth
+      await btData.connectBluetooth();
+      
       btData.resetSessionBeats();
+    } catch (err) {
+      console.error("No se pudo establecer la conexión híbrida:", err);
     }
-    btData.connectWS(wsUrl);
-  }, [btData, wsUrl, isConnected]);
-  const handleDisconnect = useCallback(() => btData.disconnectWS(), [btData]);
+  }, [btData, wsUrl]);
+
+  const handleDisconnect = useCallback(() => {
+    btData.disconnectAll();
+  }, [btData]);
 
   const stateKey = classifyBPM(metrics.bpm);
   const st       = STATE[stateKey];
