@@ -2,7 +2,7 @@
 
 BluetoothSerial SerialBT;
  
-const int PIN_SIGNAL = 32;
+const int PIN_SIGNAL = 35;
 const int FS = 300;
 
 hw_timer_t* timer = nullptr;
@@ -12,7 +12,7 @@ volatile bool hayMuestra = false;
 // ISR
 void IRAM_ATTR onTimer() {
     hayMuestra = true;
-}
+}cl
 
 void setup() {
     Serial.begin(115200);

@@ -6,7 +6,8 @@
                 # $env:BT_PORT="COM8"
 
                 # sudo rfcomm connect 0 D4:E9:F4:E3:3F:C2
-                # sudo rfcomm connect 0 00:70:07:1E:16:EA
+                # sucledo rfcomm connect 0 00:70:07:1E:16:EA
+                # sudo rfcomm connect 0 B0:CB:D8:D0:7B:6E
 # COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
 
 # npx wscat -c ws://localhost:8000/ws
