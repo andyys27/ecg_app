@@ -10,7 +10,7 @@
                 # sudo rfcomm connect 0 B0:CB:D8:D0:7B:6E
 # COM Bluetooht activos PowerShell: Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
 
-# npx wscat -c ws://localhost:8000/ws
+# npx wscat -c ws://localhost:8000/ws 
 
 import asyncio
 import json
