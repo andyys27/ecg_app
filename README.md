@@ -1,199 +1,143 @@
-# 🫀 ECG Digital Monitoring System
+# OndaVital — Sistema de Monitoreo ECG con ESP32
 
-**Un sistema integral de adquisición, procesamiento y visualización de señales electrocardiográficas en tiempo real**
-
-Proyecto académico del curso *Diseño de Sistemas de Bioinstrumentación* que integra electrónica analógica (ECG embebido) con procesamiento digital avanzado y una interfaz web interactiva. El sistema detecta automáticamente los complejos QRS, calcula métricas cardíacas y almacena el historial de sesiones.
+Plataforma de bioinstrumentación para adquisición, procesamiento y visualización en tiempo real de señales electrocardiográficas (ECG). El sistema integra un circuito analógico de electrocardiografía construido físicamente con una ESP32 como microcontrolador, un backend de procesamiento de señal en Python y una interfaz web interactiva con React.
 
 ---
 
-## ⚡ Características Principales
+## Descripción general
 
-**Adquisición en Tiempo Real**
-- Conexión inalámbrica con ESP32 vía WebSocket
-- Frecuencia de muestreo: 300 Hz
-- Conversión analógica-digital de 12 bits
+Este repositorio contiene la parte **digital** del sistema. La señal fisiológica es capturada mediante electrodos y procesada analógicamente por el circuito ECG (filtros, amplificadores de instrumentación, etc.). La señal ya acondicionada entra al ADC de la ESP32, que la transmite vía Bluetooth Serial a la computadora. A partir de ahí, el backend Python realiza el filtrado digital, la detección de complejos QRS y el cálculo de métricas clínicas; la interfaz web las muestra en tiempo real.
 
-**Procesamiento Avanzado de Señales**
-- Algoritmo **Pan-Tompkins** causal y optimizado para detección de picos R
-- Filtrado adaptativo IIR de banda (0.5-45 Hz)
-- Calibración automática de umbrales
-- Manejo de ruido y artefactos
-
-**Cálculo de Métricas Cardíacas**
-- Frecuencia cardíaca (BPM) con validación fisiológica
-- Intervalos R-R instantáneos y promediados
-- Detección de estados: Normal, Elevado, Taquicardia, Bradicardia
-- Contador de latidos totales (QRS)
-
-**Interfaz Web**
-- Dashboard reactivo con visualización dual (cruda + filtrada)
-- Gráficos animados con Chart.js y Recharts
-- Modo de validación con base de datos MIT-BIH
-- Autenticación segura con Supabase
-- Historial de sesiones persistente
-
-**Modos de Operación**
-- **Modo Conectado:** Datos en vivo desde el ESP32
-- **Modo Offline:** Validación con registros estándar MIT-BIH
-- **Modo Sesión:** Captura y almacenamiento de datos
+La aplicación también soporta un **modo offline** para reproducir registros del dataset MIT-BIH Arrhythmia Database, lo que permite probar y validar los algoritmos sin necesidad del hardware físico.
 
 ---
 
-## 🏗️ Arquitectura del Proyecto
+## Arquitectura del sistema
 
 ```
-ecg-monitoring-system/
-├── backend/                    # Procesamiento de señales (Python)
-│   ├── main.py                 # Servidor Flask/API principal
-│   ├── pan_tompkins.py         # Detección de picos R 
-│   ├── filters.py              # Diseño de filtros IIR
-│   ├── metrics.py              # Cálculo de BPM e intervalos R-R
-│   └── reader.py               # Lectura de datos CSV/DAT
-│
-├── ecg_main/                   # Firmware embebido
-│   └── ecg_main.ino            # Código Arduino para ESP32
-│
-├── frontend/                   # Interfaz web (React + Vite)
-│   ├── src/
-│   │   ├── pages/              # Vistas principales
-│   │   │   ├── Landing.jsx     # Página de inicio
-│   │   │   ├── Login.jsx       # Autenticación
-│   │   │   ├── Register.jsx    # Registro de usuarios
-│   │   │   ├── Dashboard.jsx   # Panel de control
-│   │   │   └── Monitor.jsx     # Monitor en tiempo real
-│   │   ├── components/         # Componentes reutilizables
-│   │   │   ├── LiveChart.jsx   # Gráfico ECG en vivo
-│   │   │   └── StatsPanel.jsx  # Panel de estadísticas
-│   │   ├── hooks/              # Custom React hooks
-│   │   │   ├── useBluetooth.js # Conexión BLE
-│   │   │   └── useOfflineECG.js # Modo validación
-│   │   ├── context/            # Context API
-│   │   │   └── AuthContext.jsx # Estado de autenticación
-│   │   ├── lib/                # Utilidades
-│   │   │   └── supabase.js     # Cliente Supabase
-│   │   ├── App.jsx             # Componente raíz
-│   │   └── main.jsx            # Punto de entrada
-│   ├── public/                 # Datos MIT-BIH para demo
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── package.json
-│   └── .env                    # Variables de entorno
-│
-├── data/                       # Base de datos de referencia
-│   └── mitbih/                 # MIT-BIH Arrhythmia Database
+Electrodos → Circuito ECG analógico → ESP32 (ADC + BT Serial)
+                                           │
+                                    Bluetooth (SPP)
+                                           │
+                              ┌────────────▼─────────────┐
+                              │     Backend Python        │
+                              │   FastAPI + WebSocket     │
+                              │                           │
+                              │  BTReader → ECGProcessor  │
+                              │  Filtros → Pan-Tompkins   │
+                              │  Métricas (BPM, R-R)      │
+                              └────────────┬─────────────┘
+                                           │
+                                    WebSocket / HTTP
+                                           │
+                              ┌────────────▼─────────────┐
+                              │     Frontend React        │
+                              │   Vite + Supabase         │
+                              │                           │
+                              │  Monitor → LiveChart      │
+                              │  Dashboard → Historial    │
+                              │  Autenticación de usuario │
+                              └──────────────────────────┘
+```
+
+---
+
+## Estructura del repositorio
+
+```
+ecg_app/
+├── backend/
+│   ├── main.py          # Servidor FastAPI: WebSocket + endpoints REST
+│   ├── reader.py        # BTReader: lectura asíncrona del puerto Bluetooth
+│   ├── filters.py       # Filtros digitales y orquestador ECGProcessor
+│   ├── pan_tompkins.py  # Detector de picos R (algoritmo Pan-Tompkins online)
+│   └── metrics.py       # Cálculo de BPM e intervalos R-R
+├── data/
+│   └── mitbih/
 │       ├── 100.dat / 100.hea   
 │       ├── 106.dat / 106.hea
 │       ├── 119.dat / 119.hea
 │       ├── 208.dat / 208.hea
-│       └── convert.py          # Script de conversión
-│
-├── .gitignore
-└── README.md
-```
-
-### Flujo de Datos
-
-```
-ESP32 (ADC 300 Hz)
-    ↓
-Comunicación BLE/WebSocket
-    ↓
-Backend (Filtrado + Pan-Tompkins)
-    ↓
-Métricas (BPM, RR, Umbrales)
-    ↓
-Frontend (WebSocket)
-    ↓
-Dashboard (Gráficos + Stats)
-    ↓
-Supabase (Persistencia)
+│       └── convert.py   # Conversión de registros MIT-BIH a CSV
+└── frontend/
+    └── src/
+        ├── components/
+        │   ├── LiveChart.jsx    # Canvas de visualización ECG en tiempo real
+        │   └── StatsPanel.jsx  # Panel de métricas clínicas
+        ├── context/
+        │   └── AuthContext.jsx  # Proveedor de autenticación (Supabase)
+        ├── hooks/
+        │   ├── useBluetooth.js  # Hook WebSocket (modo online)
+        │   └── useOfflineECG.js # Hook CSV offline (modo MIT-BIH)
+        ├── lib/
+        │   └── supabase.js      # Cliente Supabase
+        └── pages/
+            ├── Landing.jsx    # Página de inicio
+            ├── Login.jsx      # Inicio de sesión
+            ├── Register.jsx   # Registro de usuario (2 pasos + perfil médico)
+            ├── Dashboard.jsx  # Historial de sesiones clínicas
+            └── Monitor.jsx    # Monitor ECG principal
 ```
 
 ---
 
-## 📋 Requisitos Previos
+## Requisitos previos
 
-### Hardware
-- **ESP32** (DevKit o compatible)
-- **Circuito ECG analógico** (amplificador, filtros, offset)
-- Cable USB-C para programación y alimentación
+### Backend
+- Python 3.10+
+- Puerto Bluetooth Serial vinculado a la ESP32
 
-### Software Requerido
-
-**Sistema Operativo:**
-- Linux, macOs o Windows
-
-**Lenguajes y Herramientas:**
-| Componente | Requisito 
-|-----------|----------|
-| **Python** | Backend |
-| **Node.js** | Frontend |
-| **npm/yarn** | Gestor de paquetes | 
-| **Arduino IDE / PlatformIO** | Programación ESP32 |
-| **Git** | Control de versiones | 
-
-**Dependencias Principales:**
-
-*Backend (Python):*
-```
-numpy>=1.21.0
-scipy>=1.7.0
-flask>=2.0.0
-flask-cors>=3.0.10
-```
-
-*Frontend (Node.js):*
-```
-react@18+
-vite@4+
-@supabase/supabase-js@2+
-recharts
-tabler-icons
-```
-
-*Hardware (Arduino):*
-```
-Arduino ESP32 Board Support
-BLE support (nativo en ESP32)
-WiFi support (nativo en ESP32)
-```
+### Frontend
+- Node.js 18+
+- Cuenta en [Supabase](https://supabase.com) con las tablas `profiles`, `sessions` y `ecg_measurements`
 
 ---
 
-## 🚀 Instalación y Configuración
+## Instalación y ejecución
 
-### 1. Clonar el Repositorio
+### Clonar el Repositorio
 
 ```bash
-git clone https://github.com/tu-usuario/ecg-monitoring-system.git
-cd ecg-monitoring-system
+git clone https://github.com/andyys27/ecg_app.git
+cd ecg_app
 ```
 
-### 2. Configurar Backend (Python)
+### 1. Backend
 
 ```bash
-# Crear entorno virtual
-python3 -m venv venv
+cd backend
 
-# Activar entorno
-# En Linux/macOS:
+# Crear y activar entorno virtual
+python -m venv venv
+
+# Linux/macOS
 source venv/bin/activate
-# En Windows:
-venv\Scripts\activate
+
+# Windows (PowerShell)
+.\.venv\Scripts\Activate.ps1
 
 # Instalar dependencias
-pip install -r requirements.txt
+pip install fastapi uvicorn pyserial scipy numpy
+
+# Configurar variables de entorno (opcional, hay valores por defecto)
+export BT_PORT="/dev/rfcomm0"   # Linux
+$env:BT_PORT="COM8"           # Windows PowerShell
+
+# Iniciar servidor
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**Crear `requirements.txt` en la raíz del proyecto:**
-```
-numpy==1.24.3
-scipy==1.11.1
-flask==2.3.2
-flask-cors==4.0.0
+**Conexión Bluetooth en Linux:**
+```bash
+sudo rfcomm connect 0 <MAC_ADDRESS_ESP32>
 ```
 
-### 3. Configurar Frontend (React)
+**Listar puertos COM activos en Windows:**
+```powershell
+Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Name
+```
+
+### 2. Frontend
 
 ```bash
 cd frontend
@@ -201,203 +145,59 @@ cd frontend
 # Instalar dependencias
 npm install
 
-# Crear archivo .env.local (copiar desde .env)
-cp .env .env.local
+# Configurar variables de entorno
+# Crear archivo .env en /frontend con:
+VITE_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+VITE_SUPABASE_ANON_KEY=<tu-anon-key>
 
-# Configurar variables de Supabase
-# Editar .env.local con tus credenciales:
-# VITE_SUPABASE_URL=tu_url
-# VITE_SUPABASE_ANON_KEY=tu_key
-```
-
-### 4. Configurar ESP32
-
-#### Opción A: Con Arduino IDE
-1. Descargar [Arduino IDE](https://www.arduino.cc/en/software)
-2. Instalar soporte para ESP32:
-   - Archivo → Preferencias → URLs adicionales para Gestor de Tarjetas
-   - Agregar: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`
-3. Herramientas → Placa → Buscar "ESP32" e instalar
-4. Abrir `ecg_main/ecg_main.ino`
-5. Seleccionar puerto COM y subir código
-
-#### Opción B: Con PlatformIO
-```bash
-# Instalar PlatformIO CLI
-pip install platformio
-
-# Entrar al directorio del proyecto
-cd ecg_main
-
-# Compilar y subir a ESP32
-pio run -t upload
-```
-
-### 5. Configurar Base de Datos (Supabase)
-
-1. Crear cuenta en [Supabase](https://supabase.com)
-2. Crear nuevo proyecto
-3. Crear tabla `sessions`:
-   ```sql
-   CREATE TABLE sessions (
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     user_id UUID NOT NULL REFERENCES auth.users(id),
-     start_time TIMESTAMP DEFAULT NOW(),
-     end_time TIMESTAMP,
-     avg_bpm FLOAT,
-     max_bpm FLOAT,
-     min_bpm FLOAT,
-     total_beats INT,
-     data JSONB,
-     created_at TIMESTAMP DEFAULT NOW()
-   );
-   ```
-
----
-
-## 📖 Instrucciones de Uso
-
-### Ejecución del Backend
-
-```bash
-# Desde la raíz del proyecto
-python3 backend/main.py
-
-# El servidor estará disponible en http://localhost:5000
-```
-
-### Ejecución del Frontend
-
-```bash
-cd frontend
-
-# Desarrollo (hot-reload)
+# Iniciar en modo desarrollo
 npm run dev
-# Acceder a http://localhost:5173
-
-# Producción
-npm run build
-npm run preview
-```
-
-### Flujo de Usuario
-
-#### 1. **Registro e Inicio de Sesión**
-```
-Landing Page → Sign Up → Verificar Email → Login → Dashboard
-```
-
-#### 2. **Conectar ESP32 (Modo Bluetooth)**
-```
-Monitor → Escanear Dispositivos → Seleccionar ESP32 → Conectar
-→ Se muestra conexión activa en la UI
-```
-
-#### 3. **Iniciar Sesión de Monitoreo**
-```
-Monitor → [ESP32 conectado] → Iniciar Sesión
-→ Comienza captura en tiempo real
-→ Se visualizan:
-   • Gráfico dual (crudo + filtrado)
-   • BPM actual
-   • Intervalos R-R
-   • Contador de picos
-   • Estado cardíaco
-```
-
-#### 4. **Modo de Validación (Sin Hardware)**
-```
-Monitor → [Desconectado] → Seleccionar Registro MIT-BIH
-→ Simula adquisición real → Valida algoritmo Pan-Tompkins
-```
-
-#### 5. **Finalizar Sesión**
-```
-Monitor → [Sesión activa] → Terminar
-→ Datos se guardan en Supabase
-→ Disponibles en Dashboard histórico
-```
-
-### Ejemplos de Comandos
-
-#### Ejecutar Backend con Depuración
-```bash
-FLASK_ENV=development FLASK_DEBUG=1 python3 backend/main.py
-```
-
-#### Validar Algoritmo Pan-Tompkins
-```bash
-python3 backend/main.py --validate mitbih/100.dat
-```
-
-#### Procesar Registro MIT-BIH Offline
-```python
-from backend.reader import ECGReader
-from backend.pan_tompkins import PanTompkinsOnline
-from backend.metrics import ECGMetricsCalculator
-
-# Cargar datos
-reader = ECGReader("data/mitbih/100.dat")
-signal = reader.read_lead(0)
-
-# Procesar
-detector = PanTompkinsOnline(fs=360)
-detector.calibrate_thresholds(signal[:360])
-
-metrics_calc = ECGMetricsCalculator()
-peaks = []
-
-for sample in signal:
-    is_peak = detector.process_sample(sample)
-    if is_peak:
-        peaks.append(len(peaks))  # timestamp
-
-# Métricas
-print(f"Total picos detectados: {len(peaks)}")
-print(f"BPM promedio: {metrics_calc.last_bpm:.1f}")
 ```
 
 ---
 
-## 🛠️ Tecnologías Utilizadas
+## Modos de operación
 
-### Backend
-[![Python](https://img.shields.io/badge/Python-3.9+-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![NumPy](https://img.shields.io/badge/NumPy-1.24+-013243?logo=numpy)](https://numpy.org/)
-[![SciPy](https://img.shields.io/badge/SciPy-1.11+-blueviolet?logo=scipy)](https://scipy.org/)
-[![Flask](https://img.shields.io/badge/Flask-2.3+-green?logo=flask)](https://flask.palletsprojects.com/)
+### Modo Online (ESP32 + Bluetooth)
+La ESP32 transmite muestras en el formato `timestamp_ms,valor_adc` a 115200 baud. El `BTReader` las lee de forma asíncrona y las pone en una cola que alimenta el procesador de señal. Los resultados se difunden a todos los clientes WebSocket conectados en tiempo real.
 
-**Bibliotecas clave:**
-- **NumPy/SciPy:** Procesamiento numérico y filtrado de señales
-- **Flask:** API REST y WebSocket
+Formato de paquete enviado por la ESP32:
+```
+<timestamp_ms>,<raw_adc_value>\n
+```
 
-### Frontend
-[![React](https://img.shields.io/badge/React-18+-61dafb?logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-4+-646cff?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Supabase](https://img.shields.io/badge/Supabase-BaaS-1db854?logo=supabase&logoColor=white)](https://supabase.com/)
+### Modo Offline (MIT-BIH)
+Permite cargar registros del dataset MIT-BIH Arrhythmia Database en formato CSV. El frontend envía ventanas de 20 muestras al endpoint `/process-csv` del backend, que aplica los mismos filtros y detector de picos, y devuelve la señal procesada para reproducirla en la interfaz.
 
-**Bibliotecas clave:**
-- **Recharts:** Gráficos de ECG interactivos
-- **Tabler Icons:** Iconografía profesional
-- **Supabase JS:** Autenticación y base de datos
-- **Context API:** Gestión de estado global
+Registros incluidos por defecto:
+- `100.csv` — Ritmo sinusal normal
+- `106.csv` — Contracciones ventriculares prematuras
+- `119.csv` — Bigeminismo
+- `208.csv` — Arritmia mixta
 
-### Hardware
-[![Arduino](https://img.shields.io/badge/Arduino-ESP32-00979d?logo=arduino&logoColor=white)](https://www.espressif.com/en/products/socs/esp32)
-
-**Protocolos:**
-- **BLE (Bluetooth Low Energy):** Comunicación inalámbrica eficiente
-- **WebSocket:** Streaming de datos en tiempo real
-- **ADC 12-bit @ 300 Hz:** Conversión analógica-digital
-
-### Infraestructura
-- **Base de Datos:** PostgreSQL (Supabase)
-- **Autenticación:** JWT + Session Management
-- **Hosting:** Compatible con Vercel, Netlify, AWS
+**Convertir un nuevo registro MIT-BIH a CSV:**
+```bash
+cd data/mitbih
+pip install wfdb
+python convert.py 100   # Genera 100.csv
+```
 
 ---
 
-## 📊 Algoritmo Pan-Tompkins (Referencia)
+## Procesamiento de señal
+
+### Pipeline (muestra por muestra)
+
+1. **Filtro pasa-banda Butterworth** (orden 4, 0.5–40 Hz) — elimina deriva de línea base y ruido de alta frecuencia.
+2. **Filtro notch IIR** (60 Hz, Q=30) — rechaza la interferencia de la red eléctrica.
+3. **Detector Pan-Tompkins** (implementación online) — derivada al cuadrado + ventana de integración móvil (12% de Fs) + umbral adaptativo (35% del máximo reciente) + periodo refractario (25% de Fs).
+4. **Cálculo de métricas** — BPM promediado sobre los últimos 10 intervalos R-R válidos dentro del rango fisiológico (30–200 BPM). Timeout de señal a los 5 s sin picos.
+
+### Frecuencia de muestreo
+- Predeterminada: **300 Hz** (configurable con la variable de entorno `ECG_FS`)
+- Historial circular: 10 segundos de señal cruda y filtrada
+
+## Algoritmo Pan-Tompkins 
 
 El sistema implementa el algoritmo de detección de picos R propuesto por Pan & Tompkins, adaptado para operación causal en tiempo real:
 
@@ -415,25 +215,93 @@ threshold = NPKI + 0.25 * (SPKI - NPKI)
 
 ---
 
-## 🔐 Seguridad
+## API del backend
 
-**Autenticación:**
-- Registro y login con Supabase Auth
-- Tokens JWT seguros
-- Gestión de sesiones
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/` | GET | Estado del servidor y clientes conectados |
+| `/ws` | WebSocket | Stream en tiempo real (muestra a muestra) |
+| `/snapshot` | GET | Últimas `n` muestras del buffer (defecto: 300) |
+| `/process-csv` | POST | Procesa una ventana offline y retorna señal filtrada + picos |
 
-**Privacidad de Datos:**
-- Datos sensibles encriptados en tránsito (HTTPS)
-- CORS configurado para dominios específicos
-- Validación de entrada en backend
+### Esquema del paquete WebSocket (salida del backend)
 
-**Firmware:**
-- OTA (Over-The-Air) updates preparado en ESP32
-- Bootloader seguro
+```json
+{
+  "t": 12345,
+  "raw": 2048.0,
+  "filtered": 0.42,
+  "is_r_peak": false,
+  "bpm": 72.5,
+  "rr_interval": 827,
+  "total_beats": 14,
+  "color": "GREEN"
+}
+```
+
+Clasificación de color por BPM:
+
+| Color | Rango | Interpretación |
+|---|---|---|
+| NONE | 0 | Sin señal |
+| BLUE | < 60 bpm | Bradicardia |
+| GREEN | 60–99 bpm | Normal |
+| YELLOW | 100–140 bpm | Taquicardia leve |
+| RED | > 140 bpm | Alerta crítica |
 
 ---
 
-## 📈 Roadmap
+## Funcionalidades de la interfaz
+
+- **Landing** — Página de presentación con acceso a demo offline sin cuenta.
+- **Autenticación** — Registro en dos pasos con perfil médico (edad, sexo, peso, altura) almacenado en Supabase.
+- **Monitor** — Visualizador ECG con doble canal (señal cruda + filtrada), marcadores de pico R, indicador de BPM en tiempo real con código de color, timer de sesión clínica y selector de registros MIT-BIH para modo offline.
+- **Dashboard** — Historial de sesiones con estado clínico (normal, bradicardia, taquicardia, elevado), BPM promedio, duración y modal de detalle por sesión.
+
+---
+
+## Variables de entorno
+
+| Variable | Valor por defecto | Descripción |
+|---|---|---|
+| `BT_PORT` | `""` (vacío) | Puerto COM/rfcomm de la ESP32 |
+| `ECG_FS` | `300` | Frecuencia de muestreo en Hz |
+| `VITE_SUPABASE_URL` | — | URL del proyecto Supabase |
+| `VITE_SUPABASE_ANON_KEY` | — | Clave anónima pública de Supabase |
+
+---
+
+## Tecnologías utilizadas
+
+### Backend
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI-499848?logo=python&logoColor=white)](https://www.uvicorn.org/)
+[![SciPy](https://img.shields.io/badge/SciPy-1.11+-8CAAE6?logo=scipy&logoColor=white)](https://scipy.org/)
+[![NumPy](https://img.shields.io/badge/NumPy-1.24+-013243?logo=numpy&logoColor=white)](https://numpy.org/)
+[![PySerial](https://img.shields.io/badge/PySerial-UART-yellow?logo=python&logoColor=black)](https://pyserial.readthedocs.io/)
+[![WebSockets](https://img.shields.io/badge/WebSockets-Real--time-black?logo=socket.io)](https://fastapi.tiangolo.com/advanced/websockets/)
+
+### Frontend
+[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5+-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%2B%20DB-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Canvas API](https://img.shields.io/badge/Canvas_API-Rendering-A10000?logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
+[![React Router](https://img.shields.io/badge/React_Router-v6-CA4245?logo=react-router&logoColor=white)](https://reactrouter.com/)
+
+### Algoritmos
+[![Detección](https://img.shields.io/badge/Pan--Tompkins-QRS_Detection-orange)](#)
+[![Filtro](https://img.shields.io/badge/Butterworth-Band--pass-blue)](#)
+[![Notch](https://img.shields.io/badge/IIR_Notch-50%2F60Hz_Removal-red)](#)
+
+### Hardware
+[![ESP32](https://img.shields.io/badge/Hardware-ESP32-E7352C?logo=espressif&logoColor=white)](https://www.espressif.com/)
+[![Bluetooth](https://img.shields.io/badge/Bluetooth-Serial_SPP-0082FC?logo=bluetooth&logoColor=white)](#)
+[![ADC](https://img.shields.io/badge/ADC-12--bit_(0--3.3V)-gray)](#)
+
+---
+
+## Roadmap
 
 - [ ] Exportar datos a PDF / HL7 ECG
 - [ ] Análisis de variabilidad cardíaca (HRV)
@@ -444,13 +312,13 @@ threshold = NPKI + 0.25 * (SPKI - NPKI)
 
 ---
 
-## 📝 Licencia
+## Consideraciones clínicas
 
-Este proyecto está bajo licencia **MIT**.
+> **Aviso:** Este sistema es un prototipo académico de bioinstrumentación. No está certificado para uso diagnóstico clínico. Los resultados deben interpretarse únicamente en contexto de investigación o educación.
 
----
+--- 
 
-## 📚 Referencias
+## Referencias
 
 - **Pan & Tompkins (1985):** "A Real-Time QRS Detection Algorithm" - IEEE Transactions on Biomedical Engineering
 - **MIT-BIH Arrhythmia Database:** [PhysioNet](https://www.physionet.org/content/mitdb/1.0.0/)
